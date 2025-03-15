@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html data-theme="dim">
+<head>
+    <title>Multiplayer Tile-Based Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <!-- Tailwind and DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/themes.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="m-0 flex justify-center items-center min-h-screen bg-[#333] font-sans">
+    <div id="game-container" class="relative">
+        <div id="auth-container" class="absolute top-[10px] right-[10px] z-10">
+            <div id="login-ui" class="hidden">
+                <button class="btn btn-primary" onclick="signInWithGoogle()">Sign in with Google</button>
+            </div>
+            <div id="user-ui" class="hidden">
+                <span id="user-email" class="text-white mr-2"></span>
+                <button class="btn btn-sm btn-error" onclick="signOut()">Sign Out</button>
+            </div>
+        </div>
+        <div id="chat-container" class="hidden absolute bottom-[10px] right-[10px] w-[300px] card bg-base-300 text-base-content z-10 transition-all duration-300">
+            <div id="chat-header" class="card-title p-3 px-4 cursor-pointer bg-base-200 rounded-lg flex justify-between">
+                <div id="chat-header-left" class="flex items-center gap-3">
+                    <span id="chat-collapse-icon" class="transition-transform duration-300 text-xl leading-none">⌄</span>
+                    <div class="flex items-center gap-2">
+                        <div id="user-presence" class="w-2 h-2 rounded-full bg-warning"></div>
+                        <span id="user-name"></span>
+                    </div>
+                </div>
+                <button id="logout-button" class="btn btn-ghost btn-xs text-xl text-error" onclick="signOut()">⎋</button>
+            </div>
+            <div id="chat-content" class="transition-all duration-300">
+                <div class="tabs tabs-boxed bg-base-200 p-1">
+                    <a class="tab flex-1 tab-active" data-channel="global">Global</a>
+                    <a class="tab flex-1" data-channel="dm">DM</a>
+                </div>
+                <div id="chat-messages" class="h-[200px] overflow-y-auto p-3 text-sm bg-base-100"></div>
+                <div id="chat-input-container" class="p-2 bg-base-200 rounded-b-lg flex gap-2">
+                    <input type="text" id="chat-input" class="input input-bordered input-sm w-full" placeholder="Type a message...">
+                    <button id="send-button" class="btn btn-primary btn-sm">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase configuration - replace with your own config
+        const firebaseConfig = {
+            apiKey: "AIzaSyDB7kzS8O-DeshEEWmsBYlgCEq37i9FK74",
+            authDomain: "places-9f3e4.firebaseapp.com",
+            databaseURL: "https://places-9f3e4-default-rtdb.firebaseio.com",
+            projectId: "places-9f3e4",
+            storageBucket: "places-9f3e4.firebasestorage.app",
+            messagingSenderId: "786855423517",
+            appId: "1:786855423517:web:2fc126d626e73aa2d160f4"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const database = firebase.database();
+
+        // Game variables
+        let game = null;
+        let currentUser = null;
+        let currentScene = null;
+        let activeChat = 'global';
+        let nearbyPlayers = {};
+        let currentRoom = null;
+        let currentMessageRef = null; // Store reference instead of listener
+        let presenceInterval = null; // For regular presence checks
+
+        // Initialize global playerColors
+        window.playerColors = {};
+
+        // Auth functions
+        function signInWithGoogle() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider);
+        }
+
+        function signOut() {
+            auth.signOut();
+        }
+
+        // Add presence check function before auth state observer
+        function updatePresence() {
+            if (!currentUser) return;
+            database.ref(`players/${currentUser.uid}/lastSeenAt`).set(firebase.database.ServerValue.TIMESTAMP)
+                .then(() => {
+                    // Update the user's presence dot in chat
+                    const userPresence = document.getElementById('user-presence');
+                    userPresence.className = 'w-2 h-2 rounded-full bg-success';
+                });
+        }
+
+        function getPresenceClass(lastSeenAt) {
+            if (!lastSeenAt) return 'bg-warning';
+            const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+            return lastSeenAt > fiveMinutesAgo ? 'bg-success' : 'bg-warning';
+        }
+
+        // Auth state observer
+        auth.onAuthStateChanged((user) => {
+            const loginUI = document.getElementById('login-ui');
+            const userUI = document.getElementById('user-ui');
+            const chatContainer = document.getElementById('chat-container');
+            
+            if (user) {
+                // User is signed in
+                currentUser = user;
+                loginUI.classList.add('hidden');
+                userUI.classList.add('hidden'); // Hide the old user UI
+                chatContainer.classList.remove('hidden');
+                document.getElementById('user-name').textContent = user.email.split('@')[0];
+                
+                // Start presence tracking
+                updatePresence();
+                presenceInterval = setInterval(updatePresence, 60000); // Update every minute
+                
+                // Start or restart game with user
+                if (game) game.destroy(true);
+                game = new Phaser.Game(config);
+            } else {
+                // User is signed out
+                currentUser = null;
+                loginUI.classList.remove('hidden');
+                userUI.classList.add('hidden');
+                chatContainer.classList.add('hidden');
+                
+                // Clear presence interval
+                if (presenceInterval) {
+                    clearInterval(presenceInterval);
+                    presenceInterval = null;
+                }
+                
+                // Remove player data from Firebase when signing out
+                if (currentUser) {
+                    database.ref(`players/${currentUser.uid}`).remove();
+                }
+                
+                if (game) game.destroy(true);
+            }
+        });
+
+        // Chat functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatInput = document.getElementById('chat-input');
+            const sendButton = document.getElementById('send-button');
+            const chatTabs = document.querySelectorAll('.tab');
+            const chatHeader = document.getElementById('chat-header');
+            const chatContainer = document.getElementById('chat-container');
+            
+            // Add collapse/expand functionality
+            chatHeader.addEventListener('click', (e) => {
+                if (e.target.tagName !== 'BUTTON') {
+                    const chatContent = document.getElementById('chat-content');
+                    const collapseIcon = document.getElementById('chat-collapse-icon');
+                    
+                    if (chatContainer.classList.contains('collapsed')) {
+                        // Expand
+                        chatContent.style.maxHeight = chatContent.scrollHeight + 'px';
+                        chatContent.style.opacity = '1';
+                        collapseIcon.style.transform = 'rotate(0deg)';
+                        chatContainer.classList.remove('collapsed');
+                        chatContainer.classList.remove('rounded-lg');
+                        chatContainer.classList.add('rounded-t-lg');
+                    } else {
+                        // Collapse
+                        chatContent.style.maxHeight = '0';
+                        chatContent.style.opacity = '0';
+                        collapseIcon.style.transform = 'rotate(180deg)';
+                        chatContainer.classList.add('collapsed');
+                        chatContainer.classList.add('rounded-lg');
+                        chatContainer.classList.remove('rounded-t-lg');
+                    }
+                }
+            });
+            
+            // Add focus/blur handlers for chat input
+            chatInput.addEventListener('focus', () => {
+                if (currentScene) {
+                    currentScene.controlsEnabled = false;
+                }
+            });
+            
+            chatInput.addEventListener('blur', () => {
+                if (currentScene) {
+                    currentScene.controlsEnabled = true;
+                }
+            });
+            
+            // Change active chat tab and handle subscriptions
+            chatTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Unsubscribe from current context if exists
+                    if (currentMessageRef) {
+                        currentMessageRef.off('value');
+                        currentMessageRef = null;
+                    }
+                    
+                    // Update tab styling
+                    chatTabs.forEach(t => t.classList.remove('tab-active'));
+                    tab.classList.add('tab-active');
+                    
+                    activeChat = tab.dataset.channel;
+                    
+                    // Clear messages before loading new ones
+                    const chatMessages = document.getElementById('chat-messages');
+                    chatMessages.innerHTML = '';
+                    
+                    if (activeChat === 'global') {
+                        if (currentRoom) {
+                            // Switch from room to global
+                            const globalTab = document.querySelector('[data-channel="global"]');
+                            globalTab.textContent = 'Global';
+                            loadGlobalMessages();
+                            chatInput.placeholder = "Message everyone...";
+                        } else {
+                            loadGlobalMessages();
+                            chatInput.placeholder = "Message everyone...";
+                        }
+                    } else if (activeChat === 'dm') {
+                        const nearbyCount = Object.keys(nearbyPlayers).length;
+                        if (nearbyCount > 0) {
+                            const nearbyId = Object.keys(nearbyPlayers)[0];
+                            loadDMMessages(nearbyId);
+                            chatInput.placeholder = `Message ${nearbyPlayers[nearbyId].name}...`;
+                        } else {
+                            chatInput.placeholder = "No players nearby";
+                        }
+                    }
+                });
+            });
+            
+            // Load initial global messages
+            loadGlobalMessages();
+            
+            // Send message handlers
+            sendButton.addEventListener('click', sendChatMessage);
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendChatMessage();
+                }
+            });
+        });
+        
+        function sendChatMessage() {
+            if (!currentUser) return;
+            
+            updatePresence(); // Update presence when sending message
+            
+            const chatInput = document.getElementById('chat-input');
+            const message = chatInput.value.trim();
+            
+            if (!message) return;
+            
+            const messageData = {
+                uid: currentUser.uid,
+                sender: currentUser.email.split('@')[0],
+                text: message,
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                type: activeChat
+            };
+            
+            let messageRef;
+            
+            if (activeChat === 'global') {
+                if (currentRoom) {
+                    // We're in a room, send to room chat
+                    messageData.type = 'room';
+                    messageData.room = currentRoom;
+                    messageRef = database.ref(`messages/rooms/${currentRoom}`).push();
+                } else {
+                    // We're in global chat
+                    messageRef = database.ref('messages/global').push();
+                }
+                messageRef.set(messageData)
+                    .then(() => {
+                        console.log('Message sent successfully');
+                    })
+                    .catch((error) => {
+                        console.error('Error sending message:', error);
+                        displaySystemMessage("Failed to send message");
+                    });
+            } else if (activeChat === 'dm') {
+                const nearbyIds = Object.keys(nearbyPlayers);
+                if (nearbyIds.length > 0) {
+                    const targetId = nearbyIds[0];
+                    const chatId = [currentUser.uid, targetId].sort().join('_');
+                    messageData.targetId = targetId;
+                    messageRef = database.ref(`messages/dms/${chatId}`).push();
+                    messageRef.set(messageData)
+                        .then(() => {
+                            console.log('DM sent successfully');
+                        })
+                        .catch((error) => {
+                            console.error('Error sending DM:', error);
+                            displaySystemMessage("Failed to send message");
+                        });
+                } else {
+                    displaySystemMessage("No players nearby to DM");
+                    chatInput.value = '';
+                    return;
+                }
+            }
+            
+            chatInput.value = '';
+        }
+        
+        function loadGlobalMessages() {
+            // Unsubscribe from current context if exists
+            if (currentMessageRef) {
+                currentMessageRef.off('value');
+                currentMessageRef = null;
+            }
+            
+            currentMessageRef = database.ref('messages/global');
+            currentMessageRef.orderByChild('timestamp').limitToLast(50).on('value', (snapshot) => {
+                const messages = [];
+                snapshot.forEach((childSnapshot) => {
+                    messages.push(childSnapshot.val());
+                });
+                displayMessageHistory(messages);
+            });
+        }
+        
+        function loadRoomMessages(roomName) {
+            // Unsubscribe from current context if exists
+            if (currentMessageRef) {
+                currentMessageRef.off('value');
+                currentMessageRef = null;
+            }
+            
+            currentMessageRef = database.ref(`messages/rooms/${roomName}`);
+            currentMessageRef.orderByChild('timestamp').limitToLast(50).on('value', (snapshot) => {
+                const messages = [];
+                snapshot.forEach((childSnapshot) => {
+                    messages.push(childSnapshot.val());
+                });
+                displayMessageHistory(messages);
+            });
+        }
+        
+        function loadDMMessages(otherUserId) {
+            // Unsubscribe from current context if exists
+            if (currentMessageRef) {
+                currentMessageRef.off('value');
+                currentMessageRef = null;
+            }
+            
+            const chatId = [currentUser.uid, otherUserId].sort().join('_');
+            currentMessageRef = database.ref(`messages/dms/${chatId}`);
+            
+            currentMessageRef.orderByChild('timestamp').limitToLast(50).on('value', (snapshot) => {
+                const messages = [];
+                snapshot.forEach((childSnapshot) => {
+                    messages.push(childSnapshot.val());
+                });
+                displayMessageHistory(messages);
+            });
+        }
+        
+        function displayMessageHistory(messages) {
+            const chatMessages = document.getElementById('chat-messages');
+            chatMessages.innerHTML = '';
+            messages.forEach(message => {
+                displayChatMessage(message, message.type);
+            });
+        }
+        
+        function displayChatMessage(message, type) {
+            if (!message) return; // Guard against undefined messages
+            
+            const chatMessages = document.getElementById('chat-messages');
+            const messageElement = document.createElement('div');
+            
+            let messageClasses = 'mb-2 p-2 rounded bg-base-200';
+            
+            if (type === 'room') {
+                messageClasses += ' bg-primary/10';
+            } else if (type === 'dm') {
+                messageClasses += ' bg-secondary/10';
+            } else if (type === 'system') {
+                messageClasses += ' italic text-base-content/50';
+            }
+            
+            messageElement.className = messageClasses;
+            
+            const timestamp = message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : '';
+            
+            if ((type === 'global' || type === 'room' || type === 'dm') && message.uid) {
+                // Convert player color to hex string, fallback to white if color not found
+                const playerColor = window.playerColors[message.uid];
+                const colorHex = playerColor ? '#' + playerColor.toString(16).padStart(6, '0') : '#ffffff';
+                
+                messageElement.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold" style="color: ${colorHex}">${message.sender}</span>
+                        <span class="text-xs opacity-50">${type === 'room' ? `[${message.room}] ` : ''}${timestamp}</span>
+                    </div>
+                    <span>${message.text}</span>
+                `;
+            } else if (type === 'system') {
+                messageElement.textContent = message.text || message;
+            }
+            
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function displaySystemMessage(text) {
+            const chatMessages = document.getElementById('chat-messages');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'mb-2 p-2 rounded italic text-base-content/50';
+            messageElement.textContent = text;
+            
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Phaser game configuration
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            parent: 'game-container',
+            pixelArt: true,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 0 },
+                    debug: false
+                }
+            },
+            scene: [GameScene]
+        };
+
+        // Main Game Scene - Combined boot and game scene to simplify
+        function GameScene() {
+            Phaser.Scene.call(this, { key: 'GameScene' });
+        }
+
+        GameScene.prototype = Object.create(Phaser.Scene.prototype);
+        GameScene.prototype.constructor = GameScene;
+
+        GameScene.prototype.preload = function() {
+            // No external assets to load
+            
+            // Show loading progress
+            let progressBar = this.add.graphics();
+            let progressBox = this.add.graphics();
+            progressBox.fillStyle(0x222222, 0.8);
+            progressBox.fillRect(240, 270, 320, 50);
+            
+            let width = this.cameras.main.width;
+            let height = this.cameras.main.height;
+            let loadingText = this.make.text({
+                x: width / 2,
+                y: height / 2 - 50,
+                text: 'Loading...',
+                style: {
+                    font: '20px monospace',
+                    fill: '#ffffff'
+                }
+            });
+            loadingText.setOrigin(0.5, 0.5);
+            
+            this.load.on('progress', function (value) {
+                progressBar.clear();
+                progressBar.fillStyle(0xffffff, 1);
+                progressBar.fillRect(250, 280, 300 * value, 30);
+            });
+            
+            this.load.on('complete', function () {
+                progressBar.destroy();
+                progressBox.destroy();
+                loadingText.destroy();
+            });
+        };
+
+        GameScene.prototype.create = function() {
+            if (!currentUser) {
+                console.error("No current user found");
+                return;
+            }
+
+            currentScene = this;
+            this.players = {};
+            this.tileSize = 32;
+            this.mapWidth = 25;
+            this.mapHeight = 20;
+            
+            this.controlsEnabled = true;
+            
+            this.input.on('pointerdown', () => {
+                document.getElementById('chat-input').blur();
+            });
+            
+            this.rooms = {
+                'Room A': { x: 3, y: 3, width: 4, height: 4 },
+                'Room B': { x: 12, y: 3, width: 4, height: 4 },
+                'Room C': { x: 3, y: 12, width: 4, height: 4 },
+                'Room D': { x: 12, y: 12, width: 4, height: 4 }
+            };
+            
+            this.createTilemap();
+            this.createRooms();
+            
+            // Initialize player data
+            const initializePlayer = async () => {
+                try {
+                    // Ensure currentUser exists
+                    if (!currentUser) {
+                        console.error("No current user found");
+                        displaySystemMessage("Error: No user found. Please refresh the page.");
+                        return;
+                    }
+
+                    // Get existing data
+                    const snapshot = await database.ref(`players/${currentUser.uid}`).once('value');
+                    const existingData = snapshot.val();
+                    
+                    // Define default values
+                    const defaultX = Phaser.Math.Between(5, 15);
+                    const defaultY = Phaser.Math.Between(5, 15);
+                    const defaultColor = Phaser.Display.Color.RandomRGB().color;
+                    
+                    // Create player data with fallbacks for every property
+                    const playerData = {
+                        x: (existingData && typeof existingData.x === 'number') ? existingData.x : defaultX,
+                        y: (existingData && typeof existingData.y === 'number') ? existingData.y : defaultY,
+                        color: (existingData && typeof existingData.color === 'number') ? existingData.color : defaultColor,
+                        direction: existingData?.direction || 'down',
+                        moving: false,
+                        name: currentUser.email.split('@')[0],
+                        room: existingData?.room || null,
+                        lastSeenAt: firebase.database.ServerValue.TIMESTAMP
+                    };
+
+                    // Verify all required properties are defined
+                    if (typeof playerData.x !== 'number' || typeof playerData.y !== 'number' || typeof playerData.color !== 'number') {
+                        throw new Error('Invalid player data: missing required properties');
+                    }
+                    
+                    // Store color immediately for chat
+                    window.playerColors[currentUser.uid] = playerData.color;
+                    
+                    // Save player data to Firebase first
+                    await database.ref(`players/${currentUser.uid}`).set(playerData);
+                    
+                    // Set up disconnect handler
+                    database.ref(`players/${currentUser.uid}`).onDisconnect().remove();
+                    
+                    // Create player container
+                    this.player = this.add.container(
+                        playerData.x * this.tileSize + this.tileSize/2,
+                        playerData.y * this.tileSize + this.tileSize/2
+                    );
+                    
+                    // Add circle shape
+                    const playerCircle = this.add.circle(0, 0, this.tileSize/2 - 2, playerData.color);
+                    this.player.add(playerCircle);
+                    
+                    // Add direction indicator
+                    this.directionIndicator = this.add.rectangle(this.tileSize/3, 0, 6, 6, 0xFFFFFF);
+                    this.player.add(this.directionIndicator);
+                    
+                    // Add name label with presence indicator
+                    const nameContainer = this.add.container(0, -25);
+                    const nameText = this.add.text(8, 0, playerData.name, {
+                        font: '12px Arial',
+                        fill: '#ffffff'
+                    });
+                    nameText.setOrigin(0, 0.5);
+                    
+                    // Create background sized to fit text plus dot
+                    const padding = 16;
+                    const dotSize = 8;
+                    const nameBackground = this.add.rectangle(
+                        nameText.width/2 + padding/2 - dotSize,
+                        0,
+                        nameText.width + padding + dotSize,
+                        16,
+                        0x000000,
+                        0.5
+                    );
+                    nameBackground.setOrigin(0.5, 0.5);
+                    
+                    // Position dot relative to text start
+                    const presenceIndicator = this.add.circle(
+                        0,
+                        0,
+                        4,
+                        0xffa500
+                    );
+                    
+                    nameContainer.add([nameBackground, presenceIndicator, nameText]);
+                    this.player.add(nameContainer);
+                    
+                    // Add physics to the player container
+                    this.physics.world.enable(this.player);
+                    
+                    // Store grid position and movement state
+                    this.player.gridX = playerData.x;
+                    this.player.gridY = playerData.y;
+                    this.player.moving = playerData.moving;
+                    this.player.direction = playerData.direction;
+                    
+                    // Set up camera to follow player
+                    this.cameras.main.setBounds(0, 0, this.mapWidth * this.tileSize, this.mapHeight * this.tileSize);
+                    this.cameras.main.startFollow(this.player);
+                    
+                    // Input handling
+                    this.cursors = {
+                        up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+                        down: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+                        left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+                        right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D)
+                    };
+                    
+                    // Prevent key capturing when chat is focused
+                    this.input.keyboard.disableGlobalCapture();
+                    
+                    Object.values(this.cursors).forEach(key => {
+                        key.enabled = true;
+                        key.preventDefault = false;
+                    });
+                    
+                    // Set up listeners
+                    this.setupPlayerListeners();
+                    this.setupRoomListeners();
+                    this.setupDMListeners();
+                    
+                    displaySystemMessage("Welcome to the game! Use WASD to move.");
+                    displaySystemMessage("Enter colored areas to join room chats.");
+                    displaySystemMessage("Get close to other players to DM them.");
+                    
+                    this.updatePlayerPresence();
+                    
+                } catch (error) {
+                    console.error("Error initializing player:", error);
+                    displaySystemMessage("Error initializing player. Please refresh the page.");
+                }
+            };
+            
+            initializePlayer();
+        };
+        
+        GameScene.prototype.createTilemap = function() {
+            // Create a graphics object to draw the grid
+            const gridGraphics = this.add.graphics();
+            
+            // Draw checkerboard pattern for the ground
+            for (let y = 0; y < this.mapHeight; y++) {
+                for (let x = 0; x < this.mapWidth; x++) {
+                    // Alternate between two colors for checkerboard effect
+                    const color = ((x + y) % 2 === 0) ? 0x88aa88 : 0x99bb99;
+                    
+                    // Fill tile
+                    gridGraphics.fillStyle(color, 1);
+                    gridGraphics.fillRect(
+                        x * this.tileSize, 
+                        y * this.tileSize, 
+                        this.tileSize, 
+                        this.tileSize
+                    );
+                    
+                    // Draw tile border
+                    gridGraphics.lineStyle(1, 0x336633, 0.3);
+                    gridGraphics.strokeRect(
+                        x * this.tileSize, 
+                        y * this.tileSize, 
+                        this.tileSize, 
+                        this.tileSize
+                    );
+                }
+            }
+        };
+        
+        GameScene.prototype.createRooms = function() {
+            // Create room visualizations
+            for (const [roomName, roomData] of Object.entries(this.rooms)) {
+                // Create a rectangle to represent room area
+                const room = this.add.rectangle(
+                    roomData.x * this.tileSize + (roomData.width * this.tileSize) / 2,
+                    roomData.y * this.tileSize + (roomData.height * this.tileSize) / 2,
+                    roomData.width * this.tileSize,
+                    roomData.height * this.tileSize,
+                    0x0000ff,
+                    0.2
+                );
+                
+                // Add room name text
+                const text = this.add.text(
+                    roomData.x * this.tileSize + (roomData.width * this.tileSize) / 2,
+                    roomData.y * this.tileSize + (roomData.height * this.tileSize) / 2,
+                    roomName,
+                    { font: '12px Arial', fill: '#ffffff' }
+                );
+                text.setOrigin(0.5);
+            }
+        };
+        
+        GameScene.prototype.setupPlayerListeners = function() {
+            const playersRef = database.ref('players');
+            
+            playersRef.on('child_added', (snapshot) => {
+                const playerData = snapshot.val();
+                const playerId = snapshot.key;
+                
+                // Store color for chat messages
+                window.playerColors = window.playerColors || {};
+                window.playerColors[playerId] = playerData.color;
+                
+                if (playerId !== currentUser.uid) {
+                    const otherPlayer = this.add.container(
+                        playerData.x * this.tileSize + this.tileSize/2,
+                        playerData.y * this.tileSize + this.tileSize/2
+                    );
+                    
+                    // Add circle with player's color
+                    const playerCircle = this.add.circle(0, 0, this.tileSize/2 - 2, playerData.color || 0xff0000);
+                    otherPlayer.add(playerCircle);
+                    
+                    // Add direction indicator
+                    const dirInd = this.add.rectangle(0, 0, 6, 6, 0xFFFFFF);
+                    this.updateDirectionIndicator(dirInd, playerData.direction);
+                    otherPlayer.add(dirInd);
+                    
+                    // Add name label with presence indicator
+                    const nameContainer = this.add.container(0, -25);
+                    const nameLabel = this.add.text(8, 0, playerData.name, {
+                        font: '12px Arial',
+                        fill: '#ffffff'
+                    });
+                    nameLabel.setOrigin(0, 0.5);
+                    
+                    // Create background sized to fit text plus dot
+                    const padding = 16;
+                    const dotSize = 8;
+                    const nameBackground = this.add.rectangle(
+                        nameLabel.width/2 + padding/2 - dotSize,  // Center the background on the text
+                        0,
+                        nameLabel.width + padding + dotSize,
+                        16,
+                        0x000000,
+                        0.5
+                    );
+                    nameBackground.setOrigin(0.5, 0.5);
+                    
+                    // Position dot relative to text start
+                    const presenceIndicator = this.add.circle(
+                        0,
+                        0,
+                        4,
+                        0xffa500
+                    );
+                    
+                    nameContainer.add([nameBackground, presenceIndicator, nameLabel]);
+                    otherPlayer.add(nameContainer);
+                    
+                    // Store grid position
+                    otherPlayer.gridX = playerData.x;
+                    otherPlayer.gridY = playerData.y;
+                    otherPlayer.direction = playerData.direction;
+                    
+                    // Store player reference
+                    this.players[playerId] = {
+                        container: otherPlayer,
+                        directionIndicator: dirInd,
+                        presenceIndicator: presenceIndicator,
+                        name: playerData.name,
+                        room: playerData.room
+                    };
+                    
+                    // Update presence indicator
+                    database.ref(`players/${playerId}/lastSeenAt`).on('value', (snapshot) => {
+                        const lastSeenAt = snapshot.val();
+                        const color = lastSeenAt && (Date.now() - lastSeenAt) < 5 * 60 * 1000 ? 0x00ff00 : 0xffa500;
+                        presenceIndicator.setFillStyle(color);
+                    });
+                    
+                    this.updateNearbyPlayers();
+                }
+            });
+            
+            // Player updated
+            playersRef.on('child_changed', (snapshot) => {
+                const playerData = snapshot.val();
+                const playerId = snapshot.key;
+                
+                if (playerId !== currentUser.uid && this.players[playerId]) {
+                    const otherPlayer = this.players[playerId].container;
+                    const dirInd = this.players[playerId].directionIndicator;
+                    
+                    // Update direction indicator
+                    this.updateDirectionIndicator(dirInd, playerData.direction);
+                    
+                    // Use tweens for smooth movement - now centered in tiles
+                    if (otherPlayer.gridX !== playerData.x || otherPlayer.gridY !== playerData.y) {
+                        this.tweens.add({
+                            targets: otherPlayer,
+                            x: playerData.x * this.tileSize + this.tileSize/2,
+                            y: playerData.y * this.tileSize + this.tileSize/2,
+                            duration: 300,
+                            ease: 'Linear',
+                            onComplete: () => {
+                                // Update grid position
+                                otherPlayer.gridX = playerData.x;
+                                otherPlayer.gridY = playerData.y;
+                                
+                                // Check if player is nearby for DM
+                                this.updateNearbyPlayers();
+                            }
+                        });
+                    }
+                    
+                    // Update room information
+                    this.players[playerId].room = playerData.room;
+                }
+            });
+            
+            // Player removed
+            playersRef.on('child_removed', (snapshot) => {
+                const playerId = snapshot.key;
+                
+                if (this.players[playerId]) {
+                    this.players[playerId].container.destroy();
+                    delete this.players[playerId];
+                    
+                    // Update nearby players
+                    this.updateNearbyPlayers();
+                }
+            });
+        };
+        
+        GameScene.prototype.updateDirectionIndicator = function(indicator, direction) {
+            // Reset position
+            indicator.x = 0;
+            indicator.y = 0;
+            
+            // Position based on direction
+            switch(direction) {
+                case 'up':
+                    indicator.y = -this.tileSize/3;
+                    break;
+                case 'down':
+                    indicator.y = this.tileSize/3;
+                    break;
+                case 'left':
+                    indicator.x = -this.tileSize/3;
+                    break;
+                case 'right':
+                    indicator.x = this.tileSize/3;
+                    break;
+            }
+        };
+        
+        GameScene.prototype.setupRoomListeners = function() {
+            // Listen to all room chats
+            for (const roomName in this.rooms) {
+                database.ref(`chats/rooms/${roomName}`).limitToLast(10).on('child_added', (snapshot) => {
+                    const message = snapshot.val();
+                    
+                    // Only display if we're in this room
+                    if (currentRoom === roomName) {
+                        displayChatMessage(message, 'room');
+                    }
+                });
+            }
+        };
+        
+        GameScene.prototype.setupDMListeners = function() {
+            // Listen for DMs to/from current user
+            database.ref('chats/dm').orderByKey().on('child_added', (snapshot) => {
+                const chatKey = snapshot.key;
+                const [user1, user2] = chatKey.split('_');
+                
+                // Only process if this DM involves the current user
+                if (user1 === currentUser.uid || user2 === currentUser.uid) {
+                    // Listen for new messages in this DM channel
+                    database.ref(`chats/dm/${chatKey}`).limitToLast(10).on('child_added', (msgSnapshot) => {
+                        const message = msgSnapshot.val();
+                        
+                        // Only display messages we haven't sent (received messages)
+                        if (message.uid !== currentUser.uid) {
+                            displayChatMessage(message, 'dm');
+                        }
+                    });
+                }
+            });
+        };
+        
+        GameScene.prototype.updateNearbyPlayers = function() {
+            // Clear current nearby players
+            const previousNearbyCount = Object.keys(nearbyPlayers).length;
+            nearbyPlayers = {};
+            
+            // Check each player for proximity (1 tile distance)
+            for (const [playerId, playerObj] of Object.entries(this.players)) {
+                const distance = Phaser.Math.Distance.Between(
+                    this.player.gridX,
+                    this.player.gridY,
+                    playerObj.container.gridX,
+                    playerObj.container.gridY
+                );
+                
+                if (distance <= 1.5) { // Using 1.5 to account for diagonal tiles
+                    nearbyPlayers[playerId] = {
+                        name: playerObj.name
+                    };
+                }
+            }
+            
+            const currentNearbyCount = Object.keys(nearbyPlayers).length;
+            
+            // Handle DM tab updates
+            if (currentNearbyCount > 0) {
+                if (previousNearbyCount === 0) {
+                    // Player just got close, switch to DM
+                    displaySystemMessage("Player nearby. Switched to DM chat.");
+                    const dmTab = document.querySelector('[data-channel="dm"]');
+                    dmTab.click();
+                }
+                
+                // Update DM subscription for the nearest player
+                const nearbyId = Object.keys(nearbyPlayers)[0];
+                
+                // Update chat input placeholder
+                const chatInput = document.getElementById('chat-input');
+                if (activeChat === 'dm') {
+                    chatInput.placeholder = `Message ${nearbyPlayers[nearbyId].name}...`;
+                    loadDMMessages(nearbyId);
+                }
+            } else if (previousNearbyCount > 0) {
+                // Player just moved away
+                displaySystemMessage("Player moved away. Switched to global chat.");
+                if (activeChat === 'dm') {
+                    const globalTab = document.querySelector('[data-channel="global"]');
+                    globalTab.click();
+                }
+            }
+        };
+        
+        GameScene.prototype.checkRoomEntry = function() {
+            // Check if player is in any room
+            let inRoom = null;
+            
+            for (const [roomName, roomData] of Object.entries(this.rooms)) {
+                if (
+                    this.player.gridX >= roomData.x &&
+                    this.player.gridX < roomData.x + roomData.width &&
+                    this.player.gridY >= roomData.y &&
+                    this.player.gridY < roomData.y + roomData.height
+                ) {
+                    inRoom = roomName;
+                    break;
+                }
+            }
+            
+            // Handle room entry/exit
+            if (inRoom !== currentRoom) {
+                // Left previous room
+                if (currentRoom) {
+                    displaySystemMessage(`Left ${currentRoom}`);
+                    // Switch back to global chat
+                    const globalTab = document.querySelector('[data-channel="global"]');
+                    globalTab.textContent = 'Global';
+                    if (activeChat !== 'dm') {
+                        globalTab.click();
+                    }
+                }
+                
+                // Update current room
+                currentRoom = inRoom;
+                
+                // Entered new room
+                if (currentRoom) {
+                    displaySystemMessage(`Entered ${currentRoom}`);
+                    
+                    // Update global tab to show room name
+                    const globalTab = document.querySelector('[data-channel="global"]');
+                    globalTab.textContent = currentRoom;
+                    
+                    // Switch to room chat if not in DM
+                    if (activeChat !== 'dm') {
+                        loadRoomMessages(currentRoom);
+                        
+                        // Update chat input placeholder
+                        const chatInput = document.getElementById('chat-input');
+                        chatInput.placeholder = `Message ${currentRoom}...`;
+                    }
+                }
+                
+                // Update in database
+                database.ref(`players/${currentUser.uid}/room`).set(currentRoom);
+            }
+        };
+
+        GameScene.prototype.update = function() {
+            if (!this.player || this.player.moving || !this.controlsEnabled) return;
+            
+            // Grid-based movement
+            let newX = this.player.gridX;
+            let newY = this.player.gridY;
+            let direction = null;
+            
+            // Only allow one input at a time for true grid-based movement
+            if (this.cursors.left.isDown && !this.cursors.right.isDown && !this.cursors.up.isDown && !this.cursors.down.isDown) {
+                newX -= 1;
+                direction = 'left';
+            } else if (this.cursors.right.isDown && !this.cursors.left.isDown && !this.cursors.up.isDown && !this.cursors.down.isDown) {
+                newX += 1;
+                direction = 'right';
+            } else if (this.cursors.up.isDown && !this.cursors.left.isDown && !this.cursors.right.isDown && !this.cursors.down.isDown) {
+                newY -= 1;
+                direction = 'up';
+            } else if (this.cursors.down.isDown && !this.cursors.left.isDown && !this.cursors.right.isDown && !this.cursors.up.isDown) {
+                newY += 1;
+                direction = 'down';
+            }
+            
+            // Ensure movement stays within map bounds
+            newX = Phaser.Math.Clamp(newX, 0, this.mapWidth - 1);
+            newY = Phaser.Math.Clamp(newY, 0, this.mapHeight - 1);
+            
+            // If direction key pressed and position would change, move player
+            if (direction && (newX !== this.player.gridX || newY !== this.player.gridY)) {
+                this.player.direction = direction;
+                this.player.moving = true;
+                
+                updatePresence(); // Update presence when moving
+                this.updatePlayerPresence(); // Update all player indicators
+                
+                // Update direction indicator
+                this.updateDirectionIndicator(this.directionIndicator, direction);
+                
+                // Move with tween
+                this.tweens.add({
+                    targets: this.player,
+                    x: newX * this.tileSize + this.tileSize/2,
+                    y: newY * this.tileSize + this.tileSize/2,
+                    duration: 200, // Faster movement for snappier feel
+                    ease: 'Power1', // Changed to Power1 for smoother start/stop
+                    onComplete: () => {
+                        this.player.moving = false;
+                        
+                        // Update grid position
+                        this.player.gridX = newX;
+                        this.player.gridY = newY;
+                        
+                        // Update player position in Firebase
+                        database.ref(`players/${currentUser.uid}`).update({
+                            x: newX,
+                            y: newY,
+                            direction: direction,
+                            moving: false
+                        });
+                        
+                        // Check if entered/exited room
+                        this.checkRoomEntry();
+                        
+                        // Check for nearby players
+                        this.updateNearbyPlayers();
+                    }
+                });
+                
+                // Update moving state in Firebase
+                database.ref(`players/${currentUser.uid}`).update({
+                    direction: direction,
+                    moving: true
+                });
+            }
+        };
+
+        GameScene.prototype.updatePlayerPresence = function() {
+            if (!currentUser) return;
+            
+            // Update all player presence indicators
+            for (const [playerId, playerObj] of Object.entries(this.players)) {
+                database.ref(`players/${playerId}/lastSeenAt`).on('value', (snapshot) => {
+                    const lastSeenAt = snapshot.val();
+                    const color = lastSeenAt && (Date.now() - lastSeenAt) < 5 * 60 * 1000 ? 0x00ff00 : 0xffa500;
+                    if (playerObj.presenceIndicator) {
+                        playerObj.presenceIndicator.setFillStyle(color);
+                    }
+                });
+            }
+
+            // Update own presence indicator in game
+            database.ref(`players/${currentUser.uid}/lastSeenAt`).on('value', (snapshot) => {
+                const lastSeenAt = snapshot.val();
+                const color = lastSeenAt && (Date.now() - lastSeenAt) < 5 * 60 * 1000 ? 0x00ff00 : 0xffa500;
+                if (this.player) {
+                    const presenceIndicator = this.player.list[2].list[1];  // Access the presence indicator in the container
+                    if (presenceIndicator) {
+                        presenceIndicator.setFillStyle(color);
+                    }
+                }
+            });
+        };
+    </script>
+</body>
+</html>
