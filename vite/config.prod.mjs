@@ -12,7 +12,7 @@ export default defineConfig({
     base: subfolder,
     plugins: [
         remix({
-            ssr: false,
+            ssr: true,
             basename: subfolder,
             
             buildEnd: () => {

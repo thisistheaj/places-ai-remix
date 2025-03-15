@@ -15,55 +15,53 @@
 - [x] Code linting passes without errors
 
 ### 1.2 Firebase Integration
-- [ ] Set up Firebase project
-- [ ] Configure Firebase Realtime Database
-- [ ] Set up Firebase Authentication with Google provider
-- [ ] Create environment variables for Firebase configuration
+- [x] Set up Firebase project
+- [x] Configure Firebase Realtime Database
+- [x] Set up Firebase Authentication with Google provider
+- [x] Create environment variables for Firebase configuration
 
 #### Acceptance Criteria:
-- [ ] Firebase configuration is stored in environment variables
-- [ ] Firebase SDK is properly initialized in a single shared module
-- [ ] Authentication with Google works correctly
-- [ ] Realtime Database can be read from and written to
+- [x] Firebase configuration is stored in environment variables
+- [x] Firebase SDK is properly initialized in a single shared module
+- [x] Authentication with Google works correctly
+- [x] Realtime Database can be read from and written to
 
 ### 1.3 Shared Library Creation
-- [ ] Create a consolidated Firebase module for authentication and database operations
-- [ ] Implement a shared chat module for functionality used across components and API
-- [ ] Define TypeScript interfaces for all data structures
+- [x] Create a consolidated Firebase module for authentication and database operations
+- [x] Define TypeScript interfaces for all data structures
 
 #### Acceptance Criteria:
-- [ ] Firebase module can be imported and used throughout the application
-- [ ] Chat module provides functionality for both components and API endpoints
-- [ ] Data structures are consistently typed across the application
-- [ ] No redundant code between game and chat components
+- [x] Firebase module can be imported and used throughout the application
+- [x] Data structures are consistently typed across the application
+- [x] No redundant code between game and chat components
 
 ## 2. Application Structure and Routing
 
 ### 2.1 User Authentication
-- [ ] Implement Google authentication flow
-- [ ] Create user profile on first login
-- [ ] Store user data in Firebase
-- [ ] Handle authentication state changes
+- [x] Implement Google authentication flow
+- [x] Create user profile on first login
+- [x] Store user data in Firebase
+- [x] Handle authentication state changes
 
 #### Acceptance Criteria:
-- [ ] Users can sign in with Google
-- [ ] New users have profiles created automatically
-- [ ] Returning users have their data loaded correctly
-- [ ] Authentication state persists across page refreshes
-- [ ] Users can sign out
+- [x] Users can sign in with Google
+- [x] New users have profiles created automatically
+- [x] Returning users have their data loaded correctly
+- [x] Authentication state persists across page refreshes
+- [x] Users can sign out
 
 ### 2.2 Application Routes
-- [ ] Create a landing page at root route
-- [ ] Implement login page with authentication UI
-- [ ] Create protected game route for authenticated users
-- [ ] Add route guards for authentication
+- [x] Create a landing page at root route
+- [x] Implement login page with authentication UI
+- [x] Create protected game route for authenticated users
+- [x] Add route guards for authentication
 
 #### Acceptance Criteria:
-- [ ] Landing page provides information about the application
-- [ ] Login page handles authentication flow
-- [ ] Game route is only accessible to authenticated users
-- [ ] Unauthenticated users are redirected to login
-- [ ] Navigation between routes works correctly
+- [x] Landing page provides information about the application
+- [x] Login page handles authentication flow
+- [x] Game route is only accessible to authenticated users
+- [x] Unauthenticated users are redirected to login
+- [x] Navigation between routes works correctly
 
 ## 3. Game World Implementation
 
@@ -106,6 +104,19 @@
 - [ ] Player's current room is updated in Firebase
 - [ ] Room change events trigger appropriate UI updates
 
+### 3.4 Player Data Management
+- [ ] Extend Firebase module with player data functions
+- [ ] Implement player creation and update functions
+- [ ] Create functions for updating player position and room
+- [ ] Set up real-time player data synchronization
+
+#### Acceptance Criteria:
+- [ ] Player data is stored in Firebase with proper structure
+- [ ] Player position and direction are updated in real-time
+- [ ] Player room changes are reflected in the database
+- [ ] Other players' movements are visible to all users
+- [ ] Player data is properly typed with TypeScript interfaces
+
 ## 4. Chat System Implementation
 
 ### 4.1 Chat UI
@@ -135,10 +146,10 @@
 - [ ] Messages are sent to the correct context
 
 ### 4.3 Message Handling
-- [ ] Implement message sending functionality
-- [ ] Create message storage in Firebase
-- [ ] Handle real-time message updates
-- [ ] Implement message formatting
+- [ ] Extend Firebase module with message functions
+- [ ] Implement message sending for different contexts
+- [ ] Create listeners for different message types
+- [ ] Handle message formatting and display
 
 #### Acceptance Criteria:
 - [ ] Messages are stored in the correct Firebase paths
@@ -146,10 +157,24 @@
 - [ ] Messages include sender information and timestamps
 - [ ] Message history is loaded when opening chat
 - [ ] System messages are displayed for events
+- [ ] Message functions are properly typed with TypeScript interfaces
+
+### 4.4 Chat Module Creation
+- [ ] Implement a shared chat module for functionality used across components and API
+- [ ] Create helper functions for chat context management
+- [ ] Implement message formatting and display utilities
+- [ ] Create context switching logic
+
+#### Acceptance Criteria:
+- [ ] Chat module provides functionality for both components and API endpoints
+- [ ] Chat context changes automatically based on player location
+- [ ] Message display is consistent across the application
+- [ ] System messages are generated for important events
 
 ## 5. Presence System
 
 ### 5.1 Player Presence Implementation
+- [ ] Extend Firebase module with presence functions
 - [ ] Implement lastSeenAt timestamp updates
 - [ ] Create presence indicators (green/yellow) above players in game
 - [ ] Add presence indicators next to user names in chat
@@ -163,6 +188,7 @@
 - [ ] Presence indicators are consistent between game and chat
 - [ ] Player data is removed when disconnected
 - [ ] Other players can see presence status in real-time
+- [ ] Presence functions are properly typed with TypeScript interfaces
 
 ## 6. Bot Integration
 
