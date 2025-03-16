@@ -8,7 +8,17 @@ import {
   signOut as firebaseSignOut,
   User
 } from 'firebase/auth';
-import { getDatabase } from 'firebase/database';
+import { 
+  getDatabase, 
+  ref, 
+  onValue, 
+  DataSnapshot, 
+  onDisconnect, 
+  set, 
+  serverTimestamp,
+  remove,
+  update
+} from 'firebase/database';
 
 // Declare global window with ENV property
 declare global {
@@ -66,5 +76,94 @@ export const onAuthChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
+// Player tracking functions
+interface Player {
+  lastSeenAt?: number;
+  direction?: string;
+  moving?: boolean;
+  x?: number;
+  y?: number;
+  [key: string]: any;
+}
+
+/**
+ * Set up presence tracking for the current user
+ * This will update the lastSeenAt timestamp when the user connects
+ * and set up an onDisconnect handler to remove it when they disconnect
+ * @param userId The current user's ID
+ */
+export const setupPresenceTracking = (userId: string) => {
+  if (!userId) return;
+  
+  const userRef = ref(database, `players/${userId}`);
+  const lastSeenAtRef = ref(database, `players/${userId}/lastSeenAt`);
+  
+  // When the user connects, update their lastSeenAt timestamp
+  const updateOnlineStatus = () => {
+    // Get the current player data first to preserve other fields
+    onValue(userRef, (snapshot) => {
+      const currentData = snapshot.exists() ? snapshot.val() : {};
+      
+      // Update the lastSeenAt timestamp
+      update(userRef, {
+        lastSeenAt: Date.now()
+      });
+      
+      // Set up an onDisconnect handler to remove the lastSeenAt property when they disconnect
+      // This will trigger when the user closes their browser tab
+      onDisconnect(lastSeenAtRef).remove();
+    }, { onlyOnce: true });
+  };
+  
+  // Set up a heartbeat to update the lastSeenAt timestamp periodically
+  // This ensures the user is still considered "connected" even if they're inactive
+  const heartbeatInterval = setInterval(() => {
+    update(userRef, {
+      lastSeenAt: Date.now()
+    });
+  }, 60000); // Update every minute
+  
+  // Call the update function immediately
+  updateOnlineStatus();
+  
+  // Return a cleanup function
+  return () => {
+    clearInterval(heartbeatInterval);
+    // Remove lastSeenAt when the component unmounts
+    remove(lastSeenAtRef);
+  };
+};
+
+/**
+ * Subscribe to connected players count
+ * @param callback Function to call with the updated player count
+ * @returns Unsubscribe function
+ */
+export const subscribeToConnectedPlayers = (
+  callback: (count: number) => void
+) => {
+  const playersRef = ref(database, 'players');
+  
+  const unsubscribe = onValue(playersRef, (snapshot: DataSnapshot) => {
+    if (snapshot.exists()) {
+      const playersData = snapshot.val() as Record<string, Player>;
+      
+      // Count only players that have the lastSeenAt property set
+      let activeCount = 0;
+      Object.values(playersData).forEach((player) => {
+        if (player.lastSeenAt) {
+          activeCount++;
+        }
+      });
+      
+      callback(activeCount);
+    } else {
+      callback(0);
+    }
+  });
+  
+  return unsubscribe;
+};
+
 // Export the Firebase instances for direct access if needed
-export { auth, database }; 
+export { auth, database, ref, onValue }; 
