@@ -1,6 +1,7 @@
+import { useEffect } from 'react';
+import { useNavigate } from '@remix-run/react';
 import type { LinksFunction, MetaFunction } from '@remix-run/node';
-import { ClientOnly } from 'remix-utils/client-only';
-import App from '../app.client';
+import { useAuth } from '~/lib/auth';
 
 export const links: LinksFunction = () => {
     return [
@@ -13,15 +14,28 @@ export const links: LinksFunction = () => {
 
 export const meta: MetaFunction = () => {
     return [
-        { title: 'Phaser Remix Template' },
-        { name: 'description', content: 'A Phaser 3 Remix project template that demonstrates Remix with React communication and uses Vite for bundling.' },
+        { title: 'Places AI' },
+        { name: 'description', content: 'A multiplayer virtual space where you can interact with other players and AI agents.' },
     ];
 };
 
 export default function Index() {
+    const { user, loading } = useAuth();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (!loading) {
+            if (user) {
+                navigate('/game');
+            } else {
+                navigate('/landing');
+            }
+        }
+    }, [user, loading, navigate]);
+
     return (
-        <ClientOnly fallback={<h3>Loading Game...</h3>}>
-            { () => <App /> }
-        </ClientOnly>
+        <div className="min-h-screen flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+        </div>
     );
 }
