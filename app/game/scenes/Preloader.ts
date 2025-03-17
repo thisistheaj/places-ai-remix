@@ -40,10 +40,10 @@ export class Preloader extends Scene
         this.load.tilemapTiledJSON('office', 'tilemaps/office_1.json');
         
         // Load the tilesets
-        this.load.image('generic', 'tilesets/1_Generic_32x32.png');
-        this.load.image('livingroom', 'tilesets/2_LivingRoom_32x32.png');
-        this.load.image('kitchen', 'tilesets/12_Kitchen_32x32.png');
-        this.load.image('basement', 'tilesets/14_Basement_32x32.png');
+        this.load.image('generic', 'tilesets/1_Generic_Shadowless32x32.png');
+        this.load.image('livingroom', 'tilesets/2_LivingRoom_Shadowless_32x32.png');
+        this.load.image('kitchen', 'tilesets/12_Kitchen_Shadowless_32x32.png');
+        this.load.image('basement', 'tilesets/14_Basement_Shadowless_32x32.png');
         this.load.image('office-tiles', 'tilesets/Modern_Office_Shadowless_32x32.png');
     }
 
