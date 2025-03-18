@@ -349,6 +349,9 @@ export class Game extends Scene
 
         // Check if we can move there
         if (!this.canMoveToTile(newX, newY)) {
+            setTimeout(() => {
+                this.player.play(`idle-${this.facing}`);
+            }, this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN);
             return false;
         }
 
@@ -361,11 +364,6 @@ export class Game extends Scene
         const pixelX = (this.gridPos.x * this.gridSize) + (this.gridSize / 2);
         const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize; // Align to bottom of grid
         
-        // Only start walking animation if we weren't already moving
-        if (!this.isMoving) {
-            // this.player.play(`walk-${this.facing}`);
-        }
-
         this.add.tween({
             targets: this.player,
             x: pixelX,
@@ -373,10 +371,7 @@ export class Game extends Scene
             duration: this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN,
             ease: 'Linear',
             onComplete: () => {
-                // Only switch to idle if we're no longer moving
-                // if (!this.isMoving) {
-                    this.player.play(`idle-${this.facing}`);
-                // }
+                this.player.play(`idle-${this.facing}`);
             }
         });
 
