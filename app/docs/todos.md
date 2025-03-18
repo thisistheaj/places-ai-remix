@@ -255,3 +255,23 @@ Creating a pre-built tilemap using Tiled is the recommended approach for several
    - Finalize bot integration approach
 
 By following this plan, we'll create a cohesive implementation of Places AI that meets the requirements outlined in the documentation while leveraging the high-quality assets available to us. 
+
+
+# UI Fixes
+
+* implement turnaround
+* implement character hitbox 
+* implement collision
+* "over" layers
+   * top of meeting tables
+   * southern meeting table chairs
+
+* collisions
+   * outer walls
+   * conference walls 
+   * bottom, conference desks
+   * desks
+   * bottom game tables
+
+* maybe 
+   * thicken conference wall

@@ -20,10 +20,8 @@ export class Preloader extends Scene
 
         //  Use the 'progress' event emitted by the LoaderPlugin to update the loading bar
         this.load.on('progress', (progress: number) => {
-
             //  Update the progress bar (our bar is 464px wide, so 100% = 464px)
             bar.width = 4 + (460 * progress);
-
         });
     }
 
@@ -45,6 +43,12 @@ export class Preloader extends Scene
         this.load.image('kitchen', 'tilesets/12_Kitchen_Shadowless_32x32.png');
         this.load.image('basement', 'tilesets/14_Basement_Shadowless_32x32.png');
         this.load.image('office-tiles', 'tilesets/Modern_Office_Shadowless_32x32.png');
+
+        // Load the player character spritesheet (see app/docs/character-sprites.md for layout details)
+        this.load.spritesheet('player', 'characters/Premade_Character_32x32_01.png', {
+            frameWidth: 32,
+            frameHeight: 64
+        });
     }
 
     create ()
