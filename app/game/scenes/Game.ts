@@ -170,10 +170,23 @@ export class Game extends Scene
         // Create animations
         this.createAnimations();
 
-        // Create player at the center of the map
+        // Calculate center of the map
         const centerX = (this.map.widthInPixels / 2) + (this.gridSize / 2);
         const centerY = this.map.heightInPixels / 2;
-        this.player = this.add.sprite(centerX, centerY, 'player', 3);
+
+        // Create player at a random position within the specified rectangle relative to center
+        const spawnArea = {
+            minX: -28,
+            maxX: -12,
+            minY: -18,
+            maxY: -13
+        };
+        
+        // Convert grid coordinates to pixels and get random position relative to center
+        const spawnX = centerX + (Phaser.Math.Between(spawnArea.minX, spawnArea.maxX) * this.gridSize);
+        const spawnY = centerY + (Phaser.Math.Between(spawnArea.minY, spawnArea.maxY) * this.gridSize);
+        
+        this.player = this.add.sprite(spawnX, spawnY, 'player', 3);
         this.player.setDepth(this.PLAYER_DEPTH);
 
         // Enable physics on the player
