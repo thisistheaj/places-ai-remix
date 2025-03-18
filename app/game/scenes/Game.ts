@@ -1,5 +1,7 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
+import { subscribeToPlayers, updatePlayerPosition } from '~/lib/firebase';
+import { Player } from '~/models/player';
 
 const DEBUG_ENABLED = false; // Toggle all debug visualizations
 
@@ -24,6 +26,10 @@ export class Game extends Scene
     layers: {[key: string]: Phaser.Tilemaps.TilemapLayer} = {};
     debugText: Phaser.GameObjects.Text;
     player: Phaser.GameObjects.Sprite;
+    userId: string | null = null;
+    
+    // Other players
+    otherPlayers: {[key: string]: Phaser.GameObjects.Sprite} = {};
     
     // Movement controls
     cursors: Controls;
@@ -281,6 +287,65 @@ export class Game extends Scene
 
         // Signal that the scene is ready
         EventBus.emit('current-scene-ready', this);
+
+        // Subscribe to player updates
+        const unsubscribe = subscribeToPlayers((players) => {
+            Object.entries(players).forEach(([uid, playerData]) => {
+                // Skip our own player
+                if (uid === this.userId) return;
+
+                // Skip if player data is invalid
+                if (!playerData || typeof playerData.x !== 'number' || typeof playerData.y !== 'number') return;
+
+                // Create or update other player
+                if (!this.otherPlayers[uid]) {
+                    // Create new player sprite
+                    const sprite = this.add.sprite(
+                        (playerData.x * this.gridSize) + (this.gridSize / 2),
+                        (playerData.y * this.gridSize) + this.gridSize,
+                        'player'
+                    );
+                    sprite.setOrigin(0.5, 1.0);
+                    sprite.setDepth(this.PLAYER_DEPTH);
+                    this.otherPlayers[uid] = sprite;
+                }
+
+                const sprite = this.otherPlayers[uid];
+                
+                // Update position with tween if moving
+                if (playerData.moving) {
+                    this.add.tween({
+                        targets: sprite,
+                        x: (playerData.x * this.gridSize) + (this.gridSize / 2),
+                        y: (playerData.y * this.gridSize) + this.gridSize,
+                        duration: this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN,
+                        ease: 'Linear',
+                        onComplete: () => {
+                            sprite.play(`idle-${playerData.direction}`);
+                        }
+                    });
+                    sprite.play(`walk-${playerData.direction}`);
+                } else {
+                    // Update position immediately if not moving
+                    sprite.x = (playerData.x * this.gridSize) + (this.gridSize / 2);
+                    sprite.y = (playerData.y * this.gridSize) + this.gridSize;
+                    sprite.play(`idle-${playerData.direction}`);
+                }
+            });
+
+            // Remove disconnected players
+            Object.keys(this.otherPlayers).forEach((uid) => {
+                if (!players[uid]) {
+                    this.otherPlayers[uid].destroy();
+                    delete this.otherPlayers[uid];
+                }
+            });
+        });
+
+        // Cleanup subscription when scene is destroyed
+        this.events.on('shutdown', () => {
+            unsubscribe();
+        });
     }
 
     createAnimations() {
@@ -372,8 +437,19 @@ export class Game extends Scene
             ease: 'Linear',
             onComplete: () => {
                 this.player.play(`idle-${this.facing}`);
+                // Update Firebase when movement is complete
+                const uid = this.userId;
+                if (uid) {
+                    updatePlayerPosition(uid, this.gridPos.x, this.gridPos.y, this.facing, false);
+                }
             }
         });
+
+        // Update Firebase that we're moving
+        const uid = this.userId;
+        if (uid) {
+            updatePlayerPosition(uid, newX, newY, this.facing, true);
+        }
 
         return true;
     }
