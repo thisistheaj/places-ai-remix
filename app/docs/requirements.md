@@ -66,30 +66,30 @@
 ## 3. Game World Implementation
 
 ### 3.1 Tilemap Creation
-- [ ] Design tilemap for game world
-- [ ] Implement room areas within the map
-- [ ] Create tile layers for different elements
-- [ ] Add visual elements for different areas
+- [x] Design tilemap for game world
+- [x] Implement room areas within the map
+- [x] Create tile layers for different elements
+- [x] Add visual elements for different areas
 
 #### Acceptance Criteria:
-- [ ] Game world is rendered with proper tiles
-- [ ] Different rooms are visually distinct
-- [ ] Map has designated walkable and non-walkable areas
-- [ ] Map is properly sized for the application
+- [x] Game world is rendered with proper tiles
+- [x] Different rooms are visually distinct
+- [x] Map has designated walkable and non-walkable areas
+- [x] Map is properly sized for the application
 
 ### 3.2 Player Movement and Animation
-- [ ] Implement grid-based movement system
-- [ ] Create player sprites with directional animations
-- [ ] Add movement controls (WASD)
+- [x] Implement grid-based movement system
+- [x] Create player sprites with directional animations
+- [x] Add movement controls (WASD)
+- [x] Implement collision detection with map boundaries and obstacles
 - [ ] Synchronize movement with Firebase
-- [ ] Implement collision detection with map boundaries and obstacles
 
 #### Acceptance Criteria:
-- [ ] Players move one tile at a time
-- [ ] Movement is smooth with proper animation
-- [ ] Player faces the direction of movement
+- [x] Players move one tile at a time
+- [x] Movement is smooth with proper animation
+- [x] Player faces the direction of movement
+- [x] Players cannot move through walls or obstacles
 - [ ] Player position is synchronized with Firebase
-- [ ] Players cannot move through walls or obstacles
 - [ ] Other players' movements are visible in real-time
 
 ### 3.3 Room Detection
