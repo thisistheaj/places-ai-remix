@@ -1,7 +1,7 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
 
-const DEBUG_ENABLED = false; // Toggle all debug visualizations
+const DEBUG_ENABLED = true; // Toggle all debug visualizations
 
 interface TiledLayerData extends Phaser.Tilemaps.LayerData {
     type?: string;
@@ -66,6 +66,13 @@ export class Game extends Scene
         'Lounge/Tables',
         'Lounge/Couches Center Backs',
     ];
+
+    // Grid-based movement
+    private gridPos = { x: 0, y: 0 };
+    private lastMoveTime = 0;
+    private readonly MOVE_COOLDOWN = 150; // ms between moves
+
+    private debugGraphics: Phaser.GameObjects.Graphics;
 
     constructor ()
     {
@@ -157,10 +164,6 @@ export class Game extends Scene
         
         console.log('Created layers:', Object.keys(this.layers).join(', '));
         
-        // Set physics world bounds to match map size
-        this.physics.world.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
-        console.log('Physics world bounds:', this.physics.world.bounds);
-        
         // Set up camera bounds based on the map size
         this.camera.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
         console.log('Camera bounds:', this.camera.getBounds());
@@ -183,42 +186,30 @@ export class Game extends Scene
             maxY: -13
         };
         
-        // Convert grid coordinates to pixels and get random position relative to center
-        const spawnX = centerX + (Phaser.Math.Between(spawnArea.minX, spawnArea.maxX) * this.gridSize);
-        const spawnY = centerY + (Phaser.Math.Between(spawnArea.minY, spawnArea.maxY) * this.gridSize);
+        // Calculate spawn position in grid coordinates
+        const centerGridX = Math.floor(this.map.widthInPixels / this.gridSize / 2);
+        const centerGridY = Math.floor(this.map.heightInPixels / this.gridSize / 2);
         
-        this.player = this.add.sprite(spawnX, spawnY, 'player', 3);
+        // Apply the random offset in grid coordinates
+        this.gridPos = {
+            x: centerGridX + Phaser.Math.Between(spawnArea.minX, spawnArea.maxX),
+            y: centerGridY + Phaser.Math.Between(spawnArea.minY, spawnArea.maxY)
+        };
+        
+        // Convert grid position to pixels for sprite placement
+        const pixelX = (this.gridPos.x * this.gridSize) + (this.gridSize / 2);
+        const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize; // Align to bottom of grid
+        
+        this.player = this.add.sprite(pixelX, pixelY, 'player', 3);
+        this.player.setOrigin(0.5, 1.0); // Set origin to bottom center
         this.player.setDepth(this.PLAYER_DEPTH);
 
-        // Enable physics on the player
-        this.physics.world.enable(this.player);
-        const body = this.player.body as Phaser.Physics.Arcade.Body;
-        
-        // Configure physics debug rendering
-        this.physics.world.debugGraphic?.destroy(); // Remove any existing debug graphics
+        // Initialize debug graphics if debug is enabled
         if (DEBUG_ENABLED) {
-            this.physics.world.createDebugGraphic();
-            this.physics.world.debugGraphic.setAlpha(0.75);
+            this.debugGraphics = this.add.graphics();
+            this.debugGraphics.setDepth(this.PLAYER_DEPTH - 0.1); // Just below player
         }
-        this.physics.world.defaults.debugShowBody = DEBUG_ENABLED;
-        this.physics.world.defaults.debugShowVelocity = DEBUG_ENABLED;
-        
-        // Set up half-height collision box at the bottom of the sprite
-        body.setSize(32, 32);  // Set collision box to 32x32
-        body.setOffset(0, 32); // Offset to bottom half of 64px sprite
-        body.setCollideWorldBounds(true); // Prevent walking outside the map
-        body.setBounce(0);     // No bounce on collision
-        body.setDrag(0);       // No drag
-        body.setFriction(0);   // No friction
-        
-        console.log('Player physics body:', {
-            x: body.x,
-            y: body.y,
-            width: body.width,
-            height: body.height,
-            offset: body.offset
-        });
-        
+
         // Enable collision for specified layers
         Object.entries(this.layers).forEach(([layerPath, layer]) => {
             if (!layer || !(layer instanceof Phaser.Tilemaps.TilemapLayer)) {
@@ -264,12 +255,6 @@ export class Game extends Scene
             }
         });
 
-        // Remove duplicate debug graphics creation
-        // Debug: Enable physics debug rendering only if debug is enabled
-        // if (DEBUG_ENABLED) {
-        //     this.physics.world.createDebugGraphic();
-        // }
-        
         // Make camera follow the player
         this.camera.startFollow(this.player);
 
@@ -319,45 +304,137 @@ export class Game extends Scene
         });
     }
 
-    update() {
-        if (!this.isMoving) {
-            const body = this.player.body as Phaser.Physics.Arcade.Body;
-            const speed = 160; // Pixels per second (32 * 5)
-            
-            // Reset velocity
-            body.setVelocity(0);
+    private canMoveToTile(x: number, y: number): boolean {
+        // Check if position is within map bounds
+        if (x < 0 || x >= this.map.width || y < 0 || y >= this.map.height) {
+            return false;
+        }
 
-            // Check for movement input
-            if (this.cursors.right.isDown) {
-                body.setVelocityX(speed);
-                this.facing = 'right';
-                this.player.play(`walk-${this.facing}`, true);
-            } else if (this.cursors.left.isDown) {
-                body.setVelocityX(-speed);
-                this.facing = 'left';
-                this.player.play(`walk-${this.facing}`, true);
-            } else if (this.cursors.up.isDown) {
-                body.setVelocityY(-speed);
-                this.facing = 'up';
-                this.player.play(`walk-${this.facing}`, true);
-            } else if (this.cursors.down.isDown) {
-                body.setVelocityY(speed);
-                this.facing = 'down';
-                this.player.play(`walk-${this.facing}`, true);
-            } else {
-                // If no movement, play idle animation for current direction
-                this.player.play(`idle-${this.facing}`, true);
+        // Check all collision layers for tiles at this position
+        return !this.collisionLayers.some(layerPath => {
+            const layer = this.layers[layerPath];
+            if (!layer) return false;
+            const tile = layer.getTileAt(x, y);
+            return tile && tile.index !== -1; // Tile exists and isn't empty
+        });
+    }
+
+    private tryMove(direction: Direction): boolean {
+        const now = Date.now();
+        if (now - this.lastMoveTime < this.MOVE_COOLDOWN) {
+            return false;
+        }
+
+        // If facing different direction, just turn
+        if (direction !== this.facing) {
+            this.facing = direction;
+            this.player.play(`idle-${this.facing}`, true);
+            return true;
+        }
+
+        // Calculate target position
+        let newX = this.gridPos.x;
+        let newY = this.gridPos.y;
+        
+        switch (direction) {
+            case 'up': newY--; break;
+            case 'down': newY++; break;
+            case 'left': newX--; break;
+            case 'right': newX++; break;
+        }
+
+        // Check if we can move there
+        if (!this.canMoveToTile(newX, newY)) {
+            return false;
+        }
+
+        // Update position and start movement animation
+        this.gridPos.x = newX;
+        this.gridPos.y = newY;
+        this.lastMoveTime = now;
+        
+        // Update sprite position
+        const pixelX = (this.gridPos.x * this.gridSize) + (this.gridSize / 2);
+        const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize; // Align to bottom of grid
+        
+        this.player.play(`walk-${this.facing}`, true);
+        this.add.tween({
+            targets: this.player,
+            x: pixelX,
+            y: pixelY,
+            duration: this.MOVE_COOLDOWN,
+            ease: 'Linear',
+            onComplete: () => {
+                if (!this.isMoving) {
+                    this.player.play(`idle-${this.facing}`, true);
+                }
             }
+        });
+
+        return true;
+    }
+
+    update() {
+        this.isMoving = false;
+
+        if (this.cursors.up.isDown) {
+            this.isMoving = this.tryMove('up');
+        } else if (this.cursors.down.isDown) {
+            this.isMoving = this.tryMove('down');
+        } else if (this.cursors.left.isDown) {
+            this.isMoving = this.tryMove('left');
+        } else if (this.cursors.right.isDown) {
+            this.isMoving = this.tryMove('right');
+        }
+
+        if (!this.isMoving) {
+            this.player.play(`idle-${this.facing}`, true);
+        }
+
+        // Update debug visuals
+        if (DEBUG_ENABLED) {
+            this.updateDebugVisuals();
+        }
+    }
+
+    private updateDebugVisuals() {
+        // Clear previous debug graphics
+        this.debugGraphics.clear();
+
+        // Draw current grid cell
+        this.debugGraphics.lineStyle(2, 0xff00ff, 0.8);
+        const cellX = this.gridPos.x * this.gridSize;
+        const cellY = this.gridPos.y * this.gridSize;
+        this.debugGraphics.strokeRect(cellX, cellY, this.gridSize, this.gridSize);
+
+        // Draw target cell if moving
+        if (this.isMoving) {
+            let targetX = this.gridPos.x;
+            let targetY = this.gridPos.y;
+            
+            switch (this.facing) {
+                case 'up': targetY--; break;
+                case 'down': targetY++; break;
+                case 'left': targetX--; break;
+                case 'right': targetX++; break;
+            }
+
+            this.debugGraphics.lineStyle(2, 0x00ff00, 0.5);
+            const targetCellX = targetX * this.gridSize;
+            const targetCellY = targetY * this.gridSize;
+            this.debugGraphics.strokeRect(targetCellX, targetCellY, this.gridSize, this.gridSize);
         }
     }
 
     createDebugOverlay() {
         const debugInfo = [
             `Map: ${this.map.width}x${this.map.height} tiles (${this.map.widthInPixels}x${this.map.heightInPixels}px)`,
-            `Physics bounds: ${this.physics.world.bounds.width}x${this.physics.world.bounds.height}`,
             `Camera bounds: ${this.camera.getBounds().width}x${this.camera.getBounds().height}`,
             `Tilesets loaded: ${this.map.tilesets.length}`,
             `Layers created: ${Object.keys(this.layers).length}`,
+            `Player grid position: (${this.gridPos.x}, ${this.gridPos.y})`,
+            `Player pixel position: (${this.player.x}, ${this.player.y})`,
+            `Player facing: ${this.facing}`,
             'Layers (name: depth, collision):'
         ];
 
@@ -366,8 +443,6 @@ export class Game extends Scene
             debugInfo.push(`- ${name}: depth=${layer.depth}, collision=${hasCollision}`);
         });
         debugInfo.push(`Player depth: ${this.player.depth}`);
-        const body = this.player.body as Phaser.Physics.Arcade.Body;
-        debugInfo.push(`Player collision: ${body.width}x${body.height} at (${body.x},${body.y})`);
 
         // Create a semi-transparent black rectangle for the background
         const padding = { x: 5, y: 5 };
