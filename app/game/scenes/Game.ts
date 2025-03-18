@@ -43,6 +43,7 @@ export class Game extends Scene
         'Desks/Decor',
         'Lounge/Decor South',
         'Lounge/Tables Top',
+        'Lounge/Couches Center Top',
         'Lounge/Couches South Top'
     ];  // Keep the simple name as it is in the layer.name
     private readonly abovePlayerDecorLayers = [
