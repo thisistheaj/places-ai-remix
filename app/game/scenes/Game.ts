@@ -1,7 +1,7 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
 
-const DEBUG_ENABLED = true; // Toggle all debug visualizations
+const DEBUG_ENABLED = false; // Toggle all debug visualizations
 
 interface TiledLayerData extends Phaser.Tilemaps.LayerData {
     type?: string;
@@ -67,11 +67,15 @@ export class Game extends Scene
         'Lounge/Couches Center Backs',
     ];
 
-    // Grid-based movement
+    // Grid-based movement and animation
     private gridPos = { x: 0, y: 0 };
     private lastMoveTime = 0;
-    private readonly MOVE_COOLDOWN = 150; // ms between moves
-
+    private readonly IDLE_FRAME_RATE = 8;
+    private readonly WALK_FRAME_RATE = 24;
+    // ms between moves as an even multiple of the frame rate
+    private readonly MOVE_COOLDOWN = this.WALK_FRAME_RATE*10; 
+    // Animation must complete slightly before the next move to not look jerky
+    private readonly ANIMATION_VS_COOLDOWN = 0.95;
     private debugGraphics: Phaser.GameObjects.Graphics;
 
     constructor ()
@@ -203,6 +207,7 @@ export class Game extends Scene
         this.player = this.add.sprite(pixelX, pixelY, 'player', 3);
         this.player.setOrigin(0.5, 1.0); // Set origin to bottom center
         this.player.setDepth(this.PLAYER_DEPTH);
+        this.player.play(`idle-${this.facing}`)
 
         // Initialize debug graphics if debug is enabled
         if (DEBUG_ENABLED) {
@@ -287,7 +292,7 @@ export class Game extends Scene
                     start: 56 + (index * 6), 
                     end: 61 + (index * 6) 
                 }),
-                frameRate: 8,
+                frameRate: this.IDLE_FRAME_RATE,
                 repeat: -1
             });
 
@@ -298,7 +303,7 @@ export class Game extends Scene
                     start: 112 + (index * 6), 
                     end: 117 + (index * 6) 
                 }),
-                frameRate: 8,
+                frameRate: this.WALK_FRAME_RATE,
                 repeat: -1
             });
         });
@@ -325,12 +330,11 @@ export class Game extends Scene
             return false;
         }
 
-        // If facing different direction, just turn
+        // If facing different direction, just turn and start appropriate animation
         if (direction !== this.facing) {
             this.facing = direction;
-            this.player.play(`idle-${this.facing}`, true);
-            return true;
         }
+        this.player.play(`walk-${this.facing}`);
 
         // Calculate target position
         let newX = this.gridPos.x;
@@ -357,17 +361,22 @@ export class Game extends Scene
         const pixelX = (this.gridPos.x * this.gridSize) + (this.gridSize / 2);
         const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize; // Align to bottom of grid
         
-        this.player.play(`walk-${this.facing}`, true);
+        // Only start walking animation if we weren't already moving
+        if (!this.isMoving) {
+            // this.player.play(`walk-${this.facing}`);
+        }
+
         this.add.tween({
             targets: this.player,
             x: pixelX,
             y: pixelY,
-            duration: this.MOVE_COOLDOWN,
+            duration: this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN,
             ease: 'Linear',
             onComplete: () => {
-                if (!this.isMoving) {
-                    this.player.play(`idle-${this.facing}`, true);
-                }
+                // Only switch to idle if we're no longer moving
+                // if (!this.isMoving) {
+                    this.player.play(`idle-${this.facing}`);
+                // }
             }
         });
 
@@ -375,8 +384,6 @@ export class Game extends Scene
     }
 
     update() {
-        this.isMoving = false;
-
         if (this.cursors.up.isDown) {
             this.isMoving = this.tryMove('up');
         } else if (this.cursors.down.isDown) {
@@ -385,10 +392,6 @@ export class Game extends Scene
             this.isMoving = this.tryMove('left');
         } else if (this.cursors.right.isDown) {
             this.isMoving = this.tryMove('right');
-        }
-
-        if (!this.isMoving) {
-            this.player.play(`idle-${this.facing}`, true);
         }
 
         // Update debug visuals
