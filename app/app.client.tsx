@@ -242,9 +242,12 @@ function App()
 
     // Event emitted from the PhaserGame component
     const currentScene = (scene: Phaser.Scene) => {
-
         setCanMoveSprite(scene.scene.key !== 'MainMenu');
         
+        // If this is the Game scene and we have a user ID, set it
+        if (scene.scene.key === 'Game' && user?.uid) {
+            (scene as any).userId = user.uid;
+        }
     }
 
     const handleRestart = () => {
@@ -256,7 +259,7 @@ function App()
             <PhaserGame ref={phaserRef} currentActiveScene={currentScene} />
             
             {/* Game Controls Panel */}
-            <div className="game-controls-panel">
+            {/* <div className="game-controls-panel">
                 <div className="game-controls-title">Game Controls</div>
                 <div className="game-controls-container">
                     <div className="stats-info">
@@ -282,7 +285,6 @@ function App()
                         <pre>{`{\n  x: ${spritePosition.x}\n  y: ${spritePosition.y}\n}`}</pre>
                     </div>
                     
-                    {/* Navigation buttons */}
                     <div className="navigation-buttons">
                         <a href="/" className="navigation-button">
                             Home
@@ -292,7 +294,7 @@ function App()
                         </button>
                     </div>
                 </div>
-            </div>
+            </div> */}
         </div>
     )
 }

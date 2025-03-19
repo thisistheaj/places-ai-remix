@@ -165,5 +165,40 @@ export const subscribeToConnectedPlayers = (
   return unsubscribe;
 };
 
+/**
+ * Subscribe to all player updates
+ * @param callback Function to call with the updated players map
+ * @returns Unsubscribe function
+ */
+export const subscribeToPlayers = (callback: (players: Record<string, Player>) => void) => {
+  const playersRef = ref(database, 'players');
+  return onValue(playersRef, (snapshot) => {
+    if (snapshot.exists()) {
+      callback(snapshot.val());
+    } else {
+      callback({});
+    }
+  });
+};
+
+/**
+ * Update player position and movement state
+ * @param uid Player's user ID
+ * @param x Grid X position
+ * @param y Grid Y position
+ * @param direction Direction player is facing
+ * @param moving Whether player is currently moving
+ */
+export const updatePlayerPosition = (
+  uid: string,
+  x: number,
+  y: number,
+  direction: string,
+  moving: boolean
+) => {
+  const playerRef = ref(database, `players/${uid}`);
+  return update(playerRef, { x, y, direction, moving });
+};
+
 // Export the Firebase instances for direct access if needed
 export { auth, database, ref, onValue }; 
