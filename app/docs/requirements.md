@@ -272,9 +272,9 @@
 
 
 ## Future works
+-[x] test presence
 -[ ] profile and charachter selection
 -[ ] room detection
--[ ] test presence
 -[ ] implement API
 -[ ] Implement AI
 -[ ] Implement Tool use

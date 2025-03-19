@@ -98,6 +98,7 @@ export const setupPresenceTracking = (userId: string) => {
   if (!userId) return;
   
   const userRef = ref(database, `players/${userId}`);
+  const lastSeenAtRef = ref(database, `players/${userId}/lastSeenAt`);
   const lastLeftAtRef = ref(database, `players/${userId}/lastLeftAt`);
   
   // When the user connects, update their lastSeenAt timestamp
@@ -106,7 +107,11 @@ export const setupPresenceTracking = (userId: string) => {
     onValue(userRef, (snapshot) => {
       const currentData = snapshot.exists() ? snapshot.val() : {};
       
-      // Set up an onDisconnect handler to update lastLeftAt when they disconnect
+      // First update lastSeenAt
+      const now = Date.now();
+      set(lastSeenAtRef, now);
+      
+      // Then set up onDisconnect handler to update lastLeftAt when they disconnect
       onDisconnect(lastLeftAtRef).set(Date.now());
     }, { onlyOnce: true });
   };

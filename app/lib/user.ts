@@ -2,6 +2,7 @@ import { User } from 'firebase/auth';
 import { ref, set, get } from 'firebase/database';
 import { database } from './firebase';
 import { Player } from '~/models/player';
+import { setupPresenceTracking } from './firebase';
 
 // Create or update user profile
 export const createOrUpdateUserProfile = async (user: User): Promise<Player> => {
@@ -18,6 +19,10 @@ export const createOrUpdateUserProfile = async (user: User): Promise<Player> => 
       };
       
       await set(userRef, { ...existingData, ...updatedData });
+      
+      // Set up presence tracking after profile is updated
+      setupPresenceTracking(user.uid);
+      
       return { ...existingData, ...updatedData } as Player;
     } else {
       // Create new user profile
@@ -38,6 +43,10 @@ export const createOrUpdateUserProfile = async (user: User): Promise<Player> => 
       };
       
       await set(userRef, newUserData);
+      
+      // Set up presence tracking after profile is created
+      setupPresenceTracking(user.uid);
+      
       return newUserData;
     }
   } catch (error) {

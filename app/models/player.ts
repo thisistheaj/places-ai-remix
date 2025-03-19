@@ -2,7 +2,6 @@
 export const PRESENCE_TIMES = {
   FIVE_MINUTES: 5 * 60 * 1000,    // 5 minutes
   TWENTY_MINUTES: 20 * 60 * 1000, // 20 minutes
-  SIXTY_MINUTES: 60 * 60 * 1000,  // 60 minutes
 } as const;
 
 export interface Player {
@@ -39,13 +38,11 @@ export function getPresenceStatus(player: Player): PresenceStatus {
   const now = Date.now();
   const fiveMinutesAgo = now - PRESENCE_TIMES.FIVE_MINUTES;
   const twentyMinutesAgo = now - PRESENCE_TIMES.TWENTY_MINUTES;
-  const sixtyMinutesAgo = now - PRESENCE_TIMES.SIXTY_MINUTES;
 
   // Offline conditions
   if (
     (player.lastLeftAt && player.lastLeftAt >= player.lastSeenAt) || // Explicitly left
-    player.lastSeenAt < twentyMinutesAgo || // No activity for 20+ minutes
-    player.lastSeenAt < sixtyMinutesAgo // No activity for 60+ minutes
+    player.lastSeenAt < twentyMinutesAgo // No activity for 20+ minutes
   ) {
     return 'offline';
   }

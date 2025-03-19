@@ -2,8 +2,6 @@ import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
 import { subscribeToPlayers, updatePlayerPosition, updateLastSeen } from '~/lib/firebase';
 import { Player, getPresenceStatus, getPresenceColor } from '~/models/player';
-import { ref, onValue } from 'firebase/database';
-import { database } from '~/lib/firebase';
 
 const DEBUG_ENABLED = false; // Toggle all debug visualizations
 
@@ -104,7 +102,6 @@ export class Game extends Scene
 
     create ()
     {
-        console.log('Creating Game scene');
         
         // Set up camera
         this.camera = this.cameras.main;
@@ -112,16 +109,6 @@ export class Game extends Scene
 
         // Create the tilemap
         this.map = this.make.tilemap({ key: 'office' });
-        
-        // Debug map dimensions
-        console.log('Map dimensions:', {
-            tileWidth: this.map.tileWidth,
-            tileHeight: this.map.tileHeight,
-            width: this.map.width,
-            height: this.map.height,
-            widthInPixels: this.map.widthInPixels,
-            heightInPixels: this.map.heightInPixels
-        });
         
         // Add the tilesets
         const tilesets: Phaser.Tilemaps.Tileset[] = [];
@@ -150,27 +137,21 @@ export class Game extends Scene
             officeTileset
         );
         
-        console.log(`Loaded ${tilesets.length} tilesets`);
         
         // Create layers
         const mapLayers = this.map.layers as TiledLayerData[];
-        console.log('Map layers:', mapLayers.map(l => l.name).join(', '));
-        console.log('Layer types:', mapLayers.map(l => `${l.name}: ${l.type}`).join(', '));
         
         // Handle layer creation based on structure
         if (mapLayers.length > 0 && mapLayers[0].type === 'group') {
             // Handle grouped layers
             mapLayers.forEach(groupLayer => {
                 if (groupLayer.type === 'group' && groupLayer.layers) {
-                    console.log(`Processing group: ${groupLayer.name}`);
                     groupLayer.layers.forEach(layer => {
                         if (layer.type === 'tilelayer') {
                             const fullLayerPath = `${groupLayer.name}/${layer.name}`;
-                            console.log(`Creating layer: ${fullLayerPath}`);
                             const createdLayer = this.map.createLayer(fullLayerPath, tilesets, 0, 0);
                             if (!createdLayer) throw new Error(`Failed to create layer: ${fullLayerPath}`);
                             this.layers[fullLayerPath] = createdLayer;
-                            console.log(`Created layer: ${fullLayerPath}`);
                         }
                     });
                 }
@@ -181,7 +162,6 @@ export class Game extends Scene
                 const createdLayer = this.map.createLayer(layer.name, tilesets, 0, 0);
                 if (!createdLayer) throw new Error(`Failed to create layer: ${layer.name}`);
                 this.layers[layer.name] = createdLayer;
-                console.log(`Created layer: ${layer.name}`);
             });
         }
         
@@ -189,7 +169,6 @@ export class Game extends Scene
         
         // Set up camera bounds based on the map size
         this.camera.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
-        console.log('Camera bounds:', this.camera.getBounds());
         
         // Adjust the zoom level if needed
         // this.camera.setZoom(0.75); // Zoom out a bit to see more of the map
@@ -261,22 +240,18 @@ export class Game extends Scene
             }
             
             if (this.collisionLayers.includes(layerPath)) {
-                console.log(`Setting up collision for layer: ${layerPath}`);
                 
                 // Debug: Check tile properties
                 const nonEmptyTiles = layer.filterTiles((tile: Phaser.Tilemaps.Tile) => tile.index !== -1);
-                console.log(`Layer ${layerPath} has ${nonEmptyTiles.length} non-empty tiles`);
                 
                 // Enable collision for all non-empty tiles
                 layer.setCollisionByExclusion([-1]);
                 
                 // Debug: Verify collision was set
                 const collisionTiles = layer.filterTiles((tile: Phaser.Tilemaps.Tile) => tile.collides);
-                console.log(`Layer ${layerPath} has ${collisionTiles.length} tiles with collision`);
                 
                 // Add collider with player sprite
                 const collider = this.physics.add.collider(this.playerSprite, layer);
-                console.log(`Enabled collision for layer: ${layerPath}`);
                 
                 // Debug: Draw collision boxes if debug is enabled
                 if (DEBUG_ENABLED) {
@@ -340,18 +315,8 @@ export class Game extends Scene
         // Subscribe to player updates
         const unsubscribe = subscribeToPlayers((players) => {
             Object.entries(players).forEach(([uid, playerData]) => {
-                // Skip if player data is invalid or player is offline
+                // Skip if player data is invalid
                 if (!playerData || typeof playerData.x !== 'number' || typeof playerData.y !== 'number') return;
-                
-                const status = getPresenceStatus(playerData as Player);
-                if (status === 'offline') {
-                    // Remove offline player if they exist
-                    if (this.otherPlayers[uid]) {
-                        this.otherPlayers[uid].container.destroy();
-                        delete this.otherPlayers[uid];
-                    }
-                    return;
-                }
 
                 // Update our own position if this is our first time seeing it
                 if (uid === this.userId && playerData) {
@@ -382,6 +347,17 @@ export class Game extends Scene
 
                 // Skip our own player after initial position
                 if (uid === this.userId) return;
+
+                // Check if other player is offline
+                const status = getPresenceStatus(playerData as Player);
+                if (status === 'offline') {
+                    // Remove offline player if they exist
+                    if (this.otherPlayers[uid]) {
+                        this.otherPlayers[uid].container.destroy();
+                        delete this.otherPlayers[uid];
+                    }
+                    return;
+                }
 
                 // Create or update other player
                 if (!this.otherPlayers[uid]) {
