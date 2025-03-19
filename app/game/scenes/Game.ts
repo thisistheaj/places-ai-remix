@@ -310,6 +310,17 @@ export class Game extends Scene
             right: keyboard.addKey('D')
         };
 
+        // Prevent WASD from being captured when chat is focused
+        keyboard.disableGlobalCapture();
+        
+        // Add click handler to defocus chat input
+        this.input.on('pointerdown', () => {
+            const chatInput = document.querySelector('input[name="message"]') as HTMLInputElement;
+            if (chatInput) {
+                chatInput.blur();
+            }
+        });
+
         // Add debug text overlay only if debug is enabled
         if (DEBUG_ENABLED) {
             this.createDebugOverlay();
@@ -571,20 +582,39 @@ export class Game extends Scene
     }
 
     update() {
-        if (this.cursors.up.isDown) {
-            this.isMoving = this.tryMove('up');
-        } else if (this.cursors.down.isDown) {
-            this.isMoving = this.tryMove('down');
-        } else if (this.cursors.left.isDown) {
-            this.isMoving = this.tryMove('left');
-        } else if (this.cursors.right.isDown) {
-            this.isMoving = this.tryMove('right');
+        // Only allow movement if not already moving
+        if (this.isMoving) return;
+
+        // Check if chat input is focused
+        const chatInput = document.querySelector('input[name="message"]') as HTMLInputElement;
+        const isChatFocused = chatInput?.matches(':focus');
+        
+        // Only capture keyboard events when chat is not focused
+        if (!isChatFocused) {
+            this.input.keyboard?.enableGlobalCapture();
+        } else {
+            this.input.keyboard?.disableGlobalCapture();
+            return;
         }
 
-        // Update debug visuals
+        // Handle movement based on input
+        if (this.cursors.left.isDown && !this.cursors.right.isDown && !this.cursors.up.isDown && !this.cursors.down.isDown) {
+            this.tryMove('left');
+        } else if (this.cursors.right.isDown && !this.cursors.left.isDown && !this.cursors.up.isDown && !this.cursors.down.isDown) {
+            this.tryMove('right');
+        } else if (this.cursors.up.isDown && !this.cursors.left.isDown && !this.cursors.right.isDown && !this.cursors.down.isDown) {
+            this.tryMove('up');
+        } else if (this.cursors.down.isDown && !this.cursors.left.isDown && !this.cursors.right.isDown && !this.cursors.up.isDown) {
+            this.tryMove('down');
+        }
+
+        // Update debug visuals if enabled
         if (DEBUG_ENABLED) {
             this.updateDebugVisuals();
         }
+
+        // Update nearby players
+        this.updateNearbyPlayers();
     }
 
     private updateDebugVisuals() {
@@ -657,6 +687,35 @@ export class Game extends Scene
             this.debugText.width + (padding.x * 2),
             this.debugText.height + (padding.y * 2)
         );
+    }
+
+    private updateNearbyPlayers() {
+        if (!this.player) return;
+
+        // Check each player for proximity (1 tile distance)
+        let closestPlayer: { id: string; name: string } | null = null;
+        let minDistance = Infinity;
+
+        Object.entries(this.otherPlayers).forEach(([playerId, playerObj]) => {
+            const container = playerObj.container as Phaser.GameObjects.Container & Phaser.GameObjects.Components.Transform;
+            const distance = Phaser.Math.Distance.Between(
+                this.gridPos.x,
+                this.gridPos.y,
+                Math.floor(container.x / this.gridSize),
+                Math.floor(container.y / this.gridSize)
+            );
+            
+            if (distance <= 1.5 && distance < minDistance) { // Using 1.5 to account for diagonal tiles
+                minDistance = distance;
+                closestPlayer = {
+                    id: playerId,
+                    name: playerObj.nameText.text
+                };
+            }
+        });
+
+        // Emit event with closest player or null if none are nearby
+        EventBus.emit('nearby-player', closestPlayer);
     }
 
     changeScene ()

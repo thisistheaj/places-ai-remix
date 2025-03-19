@@ -14,7 +14,8 @@ import {
   onValue, 
   DataSnapshot, 
   onDisconnect, 
-  set, 
+  set,
+  push,
   serverTimestamp,
   remove,
   update
@@ -201,4 +202,14 @@ export const updatePlayerPosition = (
 };
 
 // Export the Firebase instances for direct access if needed
-export { auth, database, ref, onValue }; 
+export { 
+  auth, 
+  database, 
+  ref, 
+  onValue,
+  push,
+  serverTimestamp,
+  set,
+  update,
+  remove 
+}; 

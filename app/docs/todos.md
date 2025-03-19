@@ -1,63 +1,118 @@
-# Player Movement Synchronization Plan
+# Chat System Implementation
 
-## 1. Extend Firebase Functions (firebase.ts)
-- [ ] Add `subscribeToPlayers` function to listen for all player updates
-  ```typescript
-  export const subscribeToPlayers = (callback: (players: PlayerMap) => void) => {
-    const playersRef = ref(database, 'players');
-    return onValue(playersRef, (snapshot) => {
-      const players = snapshot.val() as PlayerMap;
-      callback(players);
-    });
-  };
-  ```
+## 1. Global Chat
+- [ ] As a user, I want to see a chat window when I join the game
+  - [ ] Chat window appears in bottom right corner
+  - [ ] Default state is collapsed, showing just header
+  - [ ] Header shows "Public Chat" when in global mode
+  - [ ] Clicking header expands/collapses chat
+  - [ ] Messages show sender name and timestamp
 
-## 2. Extend User Functions (user.ts)
-- [ ] Add `updatePlayerPosition` function (reusing existing ref pattern)
-  ```typescript
-  export const updatePlayerPosition = async (
-    uid: string,
-    gridPos: { x: number, y: number },
-    facing: Direction,
-    isMoving: boolean
-  ) => {
-    const playerRef = ref(database, `players/${uid}`);
-    return update(playerRef, { 
-      x: gridPos.x,
-      y: gridPos.y,
-      direction: facing,
-      moving: isMoving
-    });
-  };
-  ```
+- [ ] As a user, I want to send and receive global messages
+  - [ ] Input field at bottom of expanded chat
+  - [ ] Enter key sends message
+  - [ ] Messages appear in chronological order
+  - [ ] New messages auto-scroll to bottom
+  - [ ] Messages persist in Firebase at 'messages/global'
 
-## 3. Update Game Scene (Game.ts)
-- [ ] Add other players container to track remote players
-- [ ] Subscribe to player updates in create()
-- [ ] Call updatePlayerPosition when local player moves in tryMove()
-- [ ] Handle other players joining/moving/disconnecting
+## 2. Direct Messages
+- [ ] As a user, I want to automatically DM nearby players
+  - [ ] System detects when another player is within 1 tile
+  - [ ] Chat context automatically switches to DM
+  - [ ] Header changes to show "Chat with {player_name}"
+  - [ ] Returns to global chat when player moves away
+  - [ ] Shows clear visual feedback when context switches
 
-### Implementation Flow
-1. When player moves (in tryMove):
-   ```typescript
-   if (moveSuccessful) {
-     await updatePlayerPosition(uid, this.gridPos, this.facing, true);
-   }
-   ```
+- [ ] As a user, I want my DMs to be private
+  - [ ] Messages stored at 'messages/dm/{sorted_user_ids}'
+  - [ ] Only participants can see the messages
+  - [ ] Messages persist between encounters
+  - [ ] Clear indication that chat is private
 
-2. When receiving updates (in create):
-   ```typescript
-   subscribeToPlayers((players) => {
-     Object.entries(players).forEach(([uid, player]) => {
-       if (uid !== currentUser.uid) {
-         updateRemotePlayer(uid, player);
-       }
-     });
-   });
-   ```
+## 3. Message Management
+- [ ] As a user, I want reliable message delivery
+  - [ ] Messages have unique IDs
+  - [ ] Messages include sender ID, name, timestamp
+  - [ ] Failed messages show error state
+  - [ ] Network disconnects handled gracefully
 
-### Next Steps
-1. Add Firebase subscription function
-2. Add position update function
-3. Modify Game scene to handle remote players
-4. Test with multiple browser windows
+- [ ] As a user, I want a clean message history
+  - [ ] System messages for context switches
+  - [ ] Empty states handled gracefully
+
+## 4. UI/UX Requirements
+- [ ] As a user, I want a polished chat experience
+  - [ ] Smooth expand/collapse animation
+  - [ ] Visual feedback when sending
+  - [ ] Unread message indicator when collapsed
+  - [ ] Keyboard shortcuts (Enter to send, Esc to collapse)
+  - [ ] Mobile-friendly touch targets
+
+## Implementation Steps
+1. [ ] Set up Firebase paths and security rules
+2. [ ] Create basic chat UI with global messages
+3. [ ] Add player proximity detection
+4. [ ] Implement DM switching
+5. [ ] Add animations and polish
+
+## Technical Notes
+
+### State Synchronization Patterns
+- Chat state lives in Firebase as source of truth
+- Proximity detection in Game scene updates Firebase
+- React chat components subscribe to Firebase for updates
+- Use EventBus ONLY for ephemeral UI events (e.g., "message sent" animation)
+- Never sync message/presence state through EventBus
+
+### Firebase Structure
+```
+messages/
+  global/
+    - messageId: {senderId, senderName, text, timestamp}
+  dm/
+    user1_user2/  # IDs are always sorted alphabetically
+      - messageId: {senderId, senderName, text, timestamp, recipientId}
+players/
+  userId/
+    lastSeenAt: timestamp  # Updated on message send & movement
+```
+
+### Component Responsibilities
+- Game Scene:
+  - Detects nearby players
+  - Updates Firebase with proximity state
+  - Subscribes to presence updates for sprites
+- React Chat:
+  - Subscribes to relevant message paths
+  - Handles message sending/display
+  - Updates presence on message send
+  - Manages UI state (collapse, input focus)
+
+### Important Implementation Details
+- DM channel IDs must be consistently sorted: `[id1, id2].sort().join('_')`
+- Use `serverTimestamp()` for consistent message ordering
+- Store player colors in Firebase, not local state
+- Handle chat input focus/blur to disable game controls
+- Clear Firebase subscriptions when switching contexts
+
+### Edge Cases to Handle
+- Player disconnects during DM
+- Multiple nearby players (prioritize closest)
+- Race conditions when switching chat contexts
+- Firebase security rules for DM privacy
+- Message history cleanup/pagination
+- Reconnection and message backfill
+
+### Performance Considerations
+- Limit message history queries (50 messages)
+- Unsubscribe from Firebase listeners when switching contexts
+- Clean up old messages after 24 hours
+- Batch presence updates
+- Debounce proximity detection updates to Firebase
+
+### Local State Management
+- Chat collapse state in localStorage
+- Message input state in component
+- Loading/error states in components
+- Animations and UI feedback states
+- No persistent state in React/Phaser outside Firebase

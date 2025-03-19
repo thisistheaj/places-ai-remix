@@ -3,6 +3,7 @@ import { IRefPhaserGame, PhaserGame } from './game/PhaserGame';
 import { MainMenu } from './game/scenes/MainMenu';
 import { subscribeToConnectedPlayers, setupPresenceTracking } from './lib/firebase';
 import { useAuth } from './lib/auth';
+import { Chat } from './components/chat/Chat';
 
 function App()
 {
@@ -255,8 +256,11 @@ function App()
     }
 
     return (
-        <div id="app">
-            <PhaserGame ref={phaserRef} currentActiveScene={currentScene} />
+        <>
+            <div id="app">
+                <PhaserGame ref={phaserRef} currentActiveScene={currentScene} />
+            </div>
+            <Chat />
             
             {/* Game Controls Panel */}
             {/* <div className="game-controls-panel">
@@ -295,7 +299,7 @@ function App()
                     </div>
                 </div>
             </div> */}
-        </div>
+        </>
     )
 }
 
