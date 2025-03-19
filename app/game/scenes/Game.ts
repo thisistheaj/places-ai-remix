@@ -265,9 +265,9 @@ export class Game extends Scene
             }
             
             if (this.abovePlayerLayers.includes(layerPath)) {
-                layer.setDepth(this.PLAYER_DEPTH + 1);
+                layer.setDepth(this.PLAYER_DEPTH + 2001);
             } else if (this.abovePlayerDecorLayers.includes(layerPath)) {
-                layer.setDepth(this.PLAYER_DEPTH + 2);
+                layer.setDepth(this.PLAYER_DEPTH + 2002);
             } else {
                 layer.setDepth(0);
             }
