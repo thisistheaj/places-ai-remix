@@ -295,8 +295,9 @@ export class Game extends Scene
             }
         });
 
-        // Make camera follow the player sprite
-        this.camera.startFollow(this.playerSprite);
+        // Make camera follow the player container
+        this.camera.startFollow(this.player, true);
+        this.camera.setLerp(0.1, 0.1); // Add smooth follow
 
         // Set up keyboard controls
         const keyboard = this.input.keyboard;

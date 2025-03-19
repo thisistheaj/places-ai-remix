@@ -82,15 +82,15 @@
 - [x] Create player sprites with directional animations
 - [x] Add movement controls (WASD)
 - [x] Implement collision detection with map boundaries and obstacles
-- [ ] Synchronize movement with Firebase
+- [x] Synchronize movement with Firebase
 
 #### Acceptance Criteria:
 - [x] Players move one tile at a time
 - [x] Movement is smooth with proper animation
 - [x] Player faces the direction of movement
 - [x] Players cannot move through walls or obstacles
-- [ ] Player position is synchronized with Firebase
-- [ ] Other players' movements are visible in real-time
+- [x] Player position is synchronized with Firebase
+- [x] Other players' movements are visible in real-time
 
 ### 3.3 Room Detection
 - [ ] Implement room entry/exit detection
