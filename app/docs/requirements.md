@@ -105,81 +105,81 @@
 - [ ] Room change events trigger appropriate UI updates
 
 ### 3.4 Player Data Management
-- [ ] Extend Firebase module with player data functions
-- [ ] Implement player creation and update functions
-- [ ] Create functions for updating player position and room
-- [ ] Set up real-time player data synchronization
+- [x] Extend Firebase module with player data functions
+- [x] Implement player creation and update functions
+- [x] Create functions for updating player position and room
+- [x] Set up real-time player data synchronization
 
 #### Acceptance Criteria:
-- [ ] Player data is stored in Firebase with proper structure
-- [ ] Player position and direction are updated in real-time
+- [x] Player data is stored in Firebase with proper structure
+- [x] Player position and direction are updated in real-time
 - [ ] Player room changes are reflected in the database
-- [ ] Other players' movements are visible to all users
-- [ ] Player data is properly typed with TypeScript interfaces
+- [x] Other players' movements are visible to all users
+- [x] Player data is properly typed with TypeScript interfaces
 
 ## 4. Chat System Implementation
 
 ### 4.1 Chat UI
-- [ ] Create collapsible chat interface
-- [ ] Implement chat tabs for different contexts
-- [ ] Style chat messages based on type
-- [ ] Add user name display in chat
+- [x] Create collapsible chat interface
+- [x] Implement chat tabs for different contexts
+- [x] Style chat messages based on type
+- [x] Add user name display in chat
 
 #### Acceptance Criteria:
-- [ ] Chat UI is positioned in the bottom right corner
-- [ ] Chat can be collapsed/expanded
-- [ ] Different message types have distinct styling
-- [ ] User names are displayed with messages
-- [ ] Chat UI is responsive
+- [x] Chat UI is positioned in the bottom right corner
+- [x] Chat can be collapsed/expanded
+- [x] Different message types have distinct styling
+- [x] User names are displayed with messages
+- [x] Chat UI is responsive
 
 ### 4.2 Chat Context Switching
-- [ ] Implement global chat
+- [x] Implement global chat
 - [ ] Create room-specific chat channels
-- [ ] Implement direct messaging between nearby players
-- [ ] Handle context switching based on player location
+- [x] Implement direct messaging between nearby players
+- [x] Handle context switching based on player location
 
 #### Acceptance Criteria:
 - [ ] Chat context automatically changes when entering/exiting rooms
-- [ ] Direct messaging is available when players are adjacent
-- [ ] Global chat is always accessible
-- [ ] Chat history loads correctly when switching contexts
-- [ ] Messages are sent to the correct context
+- [x] Direct messaging is available when players are adjacent
+- [x] Global chat is always accessible
+- [x] Chat history loads correctly when switching contexts
+- [x] Messages are sent to the correct context
 
 ### 4.3 Message Handling
-- [ ] Extend Firebase module with message functions
-- [ ] Implement message sending for different contexts
-- [ ] Create listeners for different message types
-- [ ] Handle message formatting and display
+- [x] Extend Firebase module with message functions
+- [x] Implement message sending for different contexts
+- [x] Create listeners for different message types
+- [x] Handle message formatting and display
 
 #### Acceptance Criteria:
-- [ ] Messages are stored in the correct Firebase paths
-- [ ] New messages appear in real-time
-- [ ] Messages include sender information and timestamps
-- [ ] Message history is loaded when opening chat
-- [ ] System messages are displayed for events
-- [ ] Message functions are properly typed with TypeScript interfaces
+- [x] Messages are stored in the correct Firebase paths
+- [x] New messages appear in real-time
+- [x] Messages include sender information and timestamps
+- [x] Message history is loaded when opening chat
+- [x] System messages are displayed for events
+- [x] Message functions are properly typed with TypeScript interfaces
 
 ### 4.4 Chat Module Creation
-- [ ] Implement a shared chat module for functionality used across components and API
-- [ ] Create helper functions for chat context management
-- [ ] Implement message formatting and display utilities
-- [ ] Create context switching logic
+- [x] Implement a shared chat module for functionality used across components and API
+- [x] Create helper functions for chat context management
+- [x] Implement message formatting and display utilities
+- [x] Create context switching logic
 
 #### Acceptance Criteria:
-- [ ] Chat module provides functionality for both components and API endpoints
-- [ ] Chat context changes automatically based on player location
-- [ ] Message display is consistent across the application
-- [ ] System messages are generated for important events
+- [x] Chat module provides functionality for both components and API endpoints
+- [x] Chat context changes automatically based on player location
+- [x] Message display is consistent across the application
+- [x] System messages are generated for important events
 
 ## 5. Presence System
 
 ### 5.1 Player Presence Implementation
-- [ ] Extend Firebase module with presence functions
-- [ ] Implement lastSeenAt timestamp updates
-- [ ] Create presence indicators (green/yellow) above players in game
-- [ ] Add presence indicators next to user names in chat
-- [ ] Set up disconnect handlers for Firebase
-- [ ] Implement presence polling
+- [x] Extend Firebase module with presence functions
+- [x] Implement lastSeenAt timestamp updates
+- [x] Create presence indicators (green/yellow) above players in game
+- [ ] [TST THIS] Add presence indicators next to user names in chat
+- [x] Set up disconnect handlers for Firebase
+- [x] Implement presence polling
 
 #### Acceptance Criteria:
 - [ ] Player's lastSeenAt is updated at regular intervals
@@ -269,3 +269,14 @@
 - [ ] Production environment is properly secured
 - [ ] Environment variables are managed securely
 - [ ] Deployment process is documented 
+
+
+## Future works
+-[ ] profile and charachter selection
+-[ ] room detection
+-[ ] test presence
+-[ ] implement API
+-[ ] Implement AI
+-[ ] Implement Tool use
+-[ ] firebase security
+-[ ] deploy 

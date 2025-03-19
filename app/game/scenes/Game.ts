@@ -1,7 +1,7 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
-import { subscribeToPlayers, updatePlayerPosition } from '~/lib/firebase';
-import { Player } from '~/models/player';
+import { subscribeToPlayers, updatePlayerPosition, updateLastSeen } from '~/lib/firebase';
+import { Player, getPresenceStatus, getPresenceColor } from '~/models/player';
 import { ref, onValue } from 'firebase/database';
 import { database } from '~/lib/firebase';
 
@@ -93,6 +93,9 @@ export class Game extends Scene
     // Animation must complete slightly before the next move to not look jerky
     private readonly ANIMATION_VS_COOLDOWN = 0.95;
     private debugGraphics: Phaser.GameObjects.Graphics;
+
+    // Base depth for sorting players
+    private readonly BASE_PLAYER_DEPTH = 1000; // Use a large base number to avoid conflicts with map layers
 
     constructor ()
     {
@@ -205,7 +208,7 @@ export class Game extends Scene
         const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize;
         
         this.player = this.add.container(pixelX, pixelY);
-        this.player.setDepth(this.PLAYER_DEPTH);
+        this.updatePlayerDepth(this.player); // Set initial depth
 
         // Create player sprite and add to container
         this.playerSprite = this.add.sprite(0, 0, 'player', 3);
@@ -329,9 +332,27 @@ export class Game extends Scene
         // Signal that the scene is ready
         EventBus.emit('current-scene-ready', this);
 
+        // Update player depth when moving
+        this.events.on('update', () => {
+            this.updatePlayerDepth(this.player);
+        });
+
         // Subscribe to player updates
         const unsubscribe = subscribeToPlayers((players) => {
             Object.entries(players).forEach(([uid, playerData]) => {
+                // Skip if player data is invalid or player is offline
+                if (!playerData || typeof playerData.x !== 'number' || typeof playerData.y !== 'number') return;
+                
+                const status = getPresenceStatus(playerData as Player);
+                if (status === 'offline') {
+                    // Remove offline player if they exist
+                    if (this.otherPlayers[uid]) {
+                        this.otherPlayers[uid].container.destroy();
+                        delete this.otherPlayers[uid];
+                    }
+                    return;
+                }
+
                 // Update our own position if this is our first time seeing it
                 if (uid === this.userId && playerData) {
                     // Only update if we haven't moved yet (lastMoveTime is 0)
@@ -341,6 +362,7 @@ export class Game extends Scene
                         const pixelX = (this.gridPos.x * this.gridSize) + (this.gridSize / 2);
                         const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize;
                         this.player.setPosition(pixelX, pixelY);
+                        this.updatePlayerDepth(this.player);
                         this.facing = playerData.direction as Direction || 'down';
                         this.playerSprite.play(`idle-${this.facing}`);
                         
@@ -361,9 +383,6 @@ export class Game extends Scene
                 // Skip our own player after initial position
                 if (uid === this.userId) return;
 
-                // Skip if player data is invalid
-                if (!playerData || typeof playerData.x !== 'number' || typeof playerData.y !== 'number') return;
-
                 // Create or update other player
                 if (!this.otherPlayers[uid]) {
                     // Create container for player and their name/presence
@@ -371,6 +390,7 @@ export class Game extends Scene
                         (playerData.x * this.gridSize) + (this.gridSize / 2),
                         (playerData.y * this.gridSize) + this.gridSize
                     );
+                    this.updatePlayerDepth(container);
 
                     // Create player sprite
                     const sprite = this.add.sprite(0, 0, 'player') as Phaser.GameObjects.Sprite;
@@ -402,14 +422,11 @@ export class Game extends Scene
                     nameBackground.setOrigin(0.5, 0.5);
 
                     // Create presence indicator
-                    const presenceIndicator = this.add.circle(0, 0, 4, 0xffa500);
+                    const presenceIndicator = this.add.circle(0, 0, 4, getPresenceColor(status));
 
                     // Add everything to the name container
                     nameContainer.add([nameBackground, presenceIndicator, nameText]);
                     container.add(nameContainer);
-
-                    // Set container depth
-                    container.setDepth(this.PLAYER_DEPTH);
 
                     // Store references
                     this.otherPlayers[uid] = {
@@ -418,15 +435,6 @@ export class Game extends Scene
                         nameText,
                         presenceIndicator
                     };
-
-                    // Set up presence subscription
-                    const presenceRef = ref(database, `players/${uid}/lastSeenAt`);
-                    onValue(presenceRef, (snapshot) => {
-                        const lastSeenAt = snapshot.val();
-                        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-                        const color = lastSeenAt && lastSeenAt > fiveMinutesAgo ? 0x00ff00 : 0xffa500;
-                        presenceIndicator.setFillStyle(color);
-                    });
                 }
 
                 const playerObj = this.otherPlayers[uid];
@@ -439,8 +447,12 @@ export class Game extends Scene
                         y: (playerData.y * this.gridSize) + this.gridSize,
                         duration: this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN,
                         ease: 'Linear',
+                        onUpdate: () => {
+                            this.updatePlayerDepth(playerObj.container);
+                        },
                         onComplete: () => {
                             (playerObj.sprite as any).play(`idle-${playerData.direction}`);
+                            this.updatePlayerDepth(playerObj.container);
                         }
                     });
                     (playerObj.sprite as any).play(`walk-${playerData.direction}`);
@@ -450,6 +462,7 @@ export class Game extends Scene
                         (playerData.x * this.gridSize) + (this.gridSize / 2),
                         (playerData.y * this.gridSize) + this.gridSize
                     );
+                    this.updatePlayerDepth(playerObj.container);
                     (playerObj.sprite as any).play(`idle-${playerData.direction}`);
                 }
 
@@ -457,6 +470,10 @@ export class Game extends Scene
                 if (playerData.name !== playerObj.nameText.text) {
                     playerObj.nameText.setText(playerData.name || 'Anonymous');
                 }
+
+                // Update presence indicator color
+                const newStatus = getPresenceStatus(playerData as Player);
+                playerObj.presenceIndicator.setFillStyle(getPresenceColor(newStatus));
             });
 
             // Remove disconnected players
@@ -562,12 +579,17 @@ export class Game extends Scene
             y: pixelY,
             duration: this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN,
             ease: 'Linear',
+            onUpdate: () => {
+                this.updatePlayerDepth(this.player);
+            },
             onComplete: () => {
                 this.playerSprite.play(`idle-${this.facing}`);
+                this.updatePlayerDepth(this.player);
                 // Update Firebase when movement is complete
                 const uid = this.userId;
                 if (uid) {
                     updatePlayerPosition(uid, this.gridPos.x, this.gridPos.y, this.facing, false);
+                    updateLastSeen(uid); // Update lastSeenAt when moving
                 }
             }
         });
@@ -576,6 +598,7 @@ export class Game extends Scene
         const uid = this.userId;
         if (uid) {
             updatePlayerPosition(uid, newX, newY, this.facing, true);
+            updateLastSeen(uid); // Update lastSeenAt when moving
         }
 
         return true;
@@ -721,5 +744,13 @@ export class Game extends Scene
     changeScene ()
     {
         this.scene.start('GameOver');
+    }
+
+    // Update the depth of a player container based on its Y position
+    private updatePlayerDepth(container: Phaser.GameObjects.Container) {
+        // Y position divided by grid size gives us the grid Y coordinate
+        // Add a small fraction of X to ensure consistent ordering when players are on the same Y
+        const depthValue = (container.y / this.gridSize) + (container.x / (this.gridSize * 1000));
+        container.setDepth(this.BASE_PLAYER_DEPTH + depthValue);
     }
 }

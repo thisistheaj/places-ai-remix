@@ -4,6 +4,7 @@ export interface Message {
   id?: string;
   uid: string;
   sender: string;
+  senderId: string;
   text: string;
   timestamp: number;
   type: MessageType;
