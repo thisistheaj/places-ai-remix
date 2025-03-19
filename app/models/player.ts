@@ -1,6 +1,6 @@
 // Presence time constants (in milliseconds)
 export const PRESENCE_TIMES = {
-  FIVE_MINUTES: 5 * 60 * 1000,    // 5 minutes
+  FIVE_MINUTES: 5 * 1 * 1000,    // 5 minutes
   TWENTY_MINUTES: 20 * 60 * 1000, // 20 minutes
 } as const;
 

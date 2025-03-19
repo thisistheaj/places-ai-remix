@@ -4,6 +4,9 @@ import { subscribeToMessages, sendGlobalMessage, sendDirectMessage, PATHS, getUs
 import type { Message } from '~/models/message';
 import { EventBus } from '~/game/EventBus';
 import { useDebounce } from '~/hooks/useDebounce';
+import { getPresenceStatus, getPresenceColor, type Player } from '~/models/player';
+import { ref, onValue } from 'firebase/database';
+import { database } from '~/lib/firebase';
 
 interface NearbyPlayer {
   id: string;
@@ -34,6 +37,7 @@ export function Chat() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<DmUser[]>([]);
   const debouncedSearch = useDebounce(searchTerm, 300);
+  const [players, setPlayers] = useState<Record<string, Player>>({});
   
   // The current chat partner, either from proximity or manual selection
   const currentChatPartner = manualDmUser || nearbyPlayer;
@@ -80,7 +84,9 @@ export function Chat() {
     };
     
     EventBus.on('nearby-player', handleNearbyPlayer);
-    return () => EventBus.off('nearby-player', handleNearbyPlayer);
+    return () => {
+      EventBus.off('nearby-player', handleNearbyPlayer);
+    };
   }, [nearbyPlayer, manualDmUser]);
   
   // Scroll to bottom when messages change or chat is expanded
@@ -95,6 +101,26 @@ export function Chat() {
     localStorage.setItem('chat-collapsed', JSON.stringify(isChatCollapsed));
     localStorage.setItem('users-collapsed', JSON.stringify(isUsersCollapsed));
   }, [isChatCollapsed, isUsersCollapsed]);
+  
+  // Subscribe to all players to get presence information
+  useEffect(() => {
+    if (!user) return;
+    
+    const playersRef = ref(database, 'players');
+    return onValue(playersRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setPlayers(snapshot.val());
+      }
+    });
+  }, [user]);
+
+  // Helper function to get presence color for a user
+  const getPlayerPresenceColor = (playerId: string) => {
+    const player = players[playerId];
+    if (!player) return '#ff0000'; // Default to offline/red if player not found
+    const status = getPresenceStatus(player);
+    return '#' + getPresenceColor(status).toString(16).padStart(6, '0');
+  };
   
   if (!user) return null;
   
@@ -168,7 +194,7 @@ export function Chat() {
                     onClick={() => switchToDm(result)}
                     className="w-full p-2 flex items-center gap-2 hover:bg-[rgba(217,70,239,0.2)] transition-colors"
                   >
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getUserColor(result.id) }}></div>
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getPlayerPresenceColor(result.id) }}></div>
                     <span className="text-[#d946ef]">{result.name}</span>
                   </button>
                 ))}
@@ -188,7 +214,7 @@ export function Chat() {
                       onClick={() => switchToDm(dmUser)}
                       className="w-full p-2 flex items-center gap-2 hover:bg-[rgba(217,70,239,0.2)] transition-colors"
                     >
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getUserColor(dmUser.id) }}></div>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getPlayerPresenceColor(dmUser.id) }}></div>
                       <span className="text-[#d946ef]">{dmUser.name}</span>
                     </button>
                   ))}
@@ -212,7 +238,7 @@ export function Chat() {
                 className="w-2 h-2 rounded-full" 
                 style={{ 
                   backgroundColor: currentChatPartner 
-                    ? getUserColor(currentChatPartner.id)
+                    ? getPlayerPresenceColor(currentChatPartner.id)
                     : '#00ff00'
                 }}
               ></div>
