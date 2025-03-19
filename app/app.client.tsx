@@ -259,7 +259,7 @@ function App()
             <PhaserGame ref={phaserRef} currentActiveScene={currentScene} />
             
             {/* Game Controls Panel */}
-            <div className="game-controls-panel">
+            {/* <div className="game-controls-panel">
                 <div className="game-controls-title">Game Controls</div>
                 <div className="game-controls-container">
                     <div className="stats-info">
@@ -285,7 +285,6 @@ function App()
                         <pre>{`{\n  x: ${spritePosition.x}\n  y: ${spritePosition.y}\n}`}</pre>
                     </div>
                     
-                    {/* Navigation buttons */}
                     <div className="navigation-buttons">
                         <a href="/" className="navigation-button">
                             Home
@@ -295,7 +294,7 @@ function App()
                         </button>
                     </div>
                 </div>
-            </div>
+            </div> */}
         </div>
     )
 }

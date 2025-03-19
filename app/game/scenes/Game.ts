@@ -2,6 +2,8 @@ import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
 import { subscribeToPlayers, updatePlayerPosition } from '~/lib/firebase';
 import { Player } from '~/models/player';
+import { ref, onValue } from 'firebase/database';
+import { database } from '~/lib/firebase';
 
 const DEBUG_ENABLED = false; // Toggle all debug visualizations
 
@@ -25,11 +27,19 @@ export class Game extends Scene
     map: Phaser.Tilemaps.Tilemap;
     layers: {[key: string]: Phaser.Tilemaps.TilemapLayer} = {};
     debugText: Phaser.GameObjects.Text;
-    player: Phaser.GameObjects.Sprite;
+    player: Phaser.GameObjects.Container;
+    playerSprite: Phaser.GameObjects.Sprite;
     userId: string | null = null;
     
-    // Other players
-    otherPlayers: {[key: string]: Phaser.GameObjects.Sprite} = {};
+    // Other players with their containers and components
+    otherPlayers: {
+        [key: string]: {
+            container: Phaser.GameObjects.Container;
+            sprite: Phaser.GameObjects.Sprite;
+            nameText: Phaser.GameObjects.Text;
+            presenceIndicator: Phaser.GameObjects.Arc;
+        }
+    } = {};
     
     // Movement controls
     cursors: Controls;
@@ -184,41 +194,60 @@ export class Game extends Scene
         // Create animations
         this.createAnimations();
 
-        // Calculate center of the map
-        const centerX = (this.map.widthInPixels / 2) + (this.gridSize / 2);
-        const centerY = this.map.heightInPixels / 2;
-
-        // Create player at a random position within the specified rectangle relative to center
-        const spawnArea = {
-            minX: -28,
-            maxX: -12,
-            minY: -18,
-            maxY: -13
-        };
-        
-        // Calculate spawn position in grid coordinates
-        const centerGridX = Math.floor(this.map.widthInPixels / this.gridSize / 2);
-        const centerGridY = Math.floor(this.map.heightInPixels / this.gridSize / 2);
-        
-        // Apply the random offset in grid coordinates
+        // Initialize player at a default position
         this.gridPos = {
-            x: centerGridX + Phaser.Math.Between(spawnArea.minX, spawnArea.maxX),
-            y: centerGridY + Phaser.Math.Between(spawnArea.minY, spawnArea.maxY)
+            x: Math.floor(this.map.widthInPixels / this.gridSize / 2),
+            y: Math.floor(this.map.heightInPixels / this.gridSize / 2)
         };
-        
-        // Convert grid position to pixels for sprite placement
+
+        // Create player container at default position
         const pixelX = (this.gridPos.x * this.gridSize) + (this.gridSize / 2);
-        const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize; // Align to bottom of grid
+        const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize;
         
-        this.player = this.add.sprite(pixelX, pixelY, 'player', 3);
-        this.player.setOrigin(0.5, 1.0); // Set origin to bottom center
+        this.player = this.add.container(pixelX, pixelY);
         this.player.setDepth(this.PLAYER_DEPTH);
-        this.player.play(`idle-${this.facing}`)
+
+        // Create player sprite and add to container
+        this.playerSprite = this.add.sprite(0, 0, 'player', 3);
+        this.playerSprite.setOrigin(0.5, 1.0);
+        this.playerSprite.play(`idle-${this.facing}`);
+        this.player.add(this.playerSprite);
+
+        // Create name container for player
+        const nameContainer = this.add.container(0, -57); // -25 - 32 to move it up one unit
+
+        // Create name text
+        const nameText = this.add.text(8, 0, 'Anonymous', {
+            fontFamily: 'Arial',
+            fontSize: '12px',
+            color: '#ffffff'
+        });
+        nameText.setOrigin(0, 0.5);
+
+        // Create background for name and presence indicator
+        const padding = 16;
+        const dotSize = 8;
+        const nameBackground = this.add.rectangle(
+            nameText.width/2 + padding/2 - dotSize,
+            0,
+            nameText.width + padding + dotSize,
+            16,
+            0x000000,
+            0.5
+        );
+        nameBackground.setOrigin(0.5, 0.5);
+
+        // Create presence indicator
+        const presenceIndicator = this.add.circle(0, 0, 4, 0x00ff00);
+
+        // Add everything to the name container
+        nameContainer.add([nameBackground, presenceIndicator, nameText]);
+        this.player.add(nameContainer);
 
         // Initialize debug graphics if debug is enabled
         if (DEBUG_ENABLED) {
             this.debugGraphics = this.add.graphics();
-            this.debugGraphics.setDepth(this.PLAYER_DEPTH - 0.1); // Just below player
+            this.debugGraphics.setDepth(this.PLAYER_DEPTH - 0.1);
         }
 
         // Enable collision for specified layers
@@ -242,8 +271,8 @@ export class Game extends Scene
                 const collisionTiles = layer.filterTiles((tile: Phaser.Tilemaps.Tile) => tile.collides);
                 console.log(`Layer ${layerPath} has ${collisionTiles.length} tiles with collision`);
                 
-                // Add collider
-                const collider = this.physics.add.collider(this.player, layer);
+                // Add collider with player sprite
+                const collider = this.physics.add.collider(this.playerSprite, layer);
                 console.log(`Enabled collision for layer: ${layerPath}`);
                 
                 // Debug: Draw collision boxes if debug is enabled
@@ -266,8 +295,8 @@ export class Game extends Scene
             }
         });
 
-        // Make camera follow the player
-        this.camera.startFollow(this.player);
+        // Make camera follow the player sprite
+        this.camera.startFollow(this.playerSprite);
 
         // Set up keyboard controls
         const keyboard = this.input.keyboard;
@@ -291,7 +320,33 @@ export class Game extends Scene
         // Subscribe to player updates
         const unsubscribe = subscribeToPlayers((players) => {
             Object.entries(players).forEach(([uid, playerData]) => {
-                // Skip our own player
+                // Update our own position if this is our first time seeing it
+                if (uid === this.userId && playerData) {
+                    // Only update if we haven't moved yet (lastMoveTime is 0)
+                    if (this.lastMoveTime === 0 && typeof playerData.x === 'number' && typeof playerData.y === 'number') {
+                        this.gridPos.x = playerData.x;
+                        this.gridPos.y = playerData.y;
+                        const pixelX = (this.gridPos.x * this.gridSize) + (this.gridSize / 2);
+                        const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize;
+                        this.player.setPosition(pixelX, pixelY);
+                        this.facing = playerData.direction as Direction || 'down';
+                        this.playerSprite.play(`idle-${this.facing}`);
+                        
+                        // Update player name if it exists
+                        if (playerData.name) {
+                            nameText.setText(playerData.name);
+                            // Recalculate background width
+                            nameBackground.setSize(
+                                nameText.width + padding + dotSize,
+                                16
+                            );
+                            nameBackground.setPosition(nameText.width/2 + padding/2 - dotSize, 0);
+                        }
+                    }
+                    return;
+                }
+
+                // Skip our own player after initial position
                 if (uid === this.userId) return;
 
                 // Skip if player data is invalid
@@ -299,44 +354,103 @@ export class Game extends Scene
 
                 // Create or update other player
                 if (!this.otherPlayers[uid]) {
-                    // Create new player sprite
-                    const sprite = this.add.sprite(
+                    // Create container for player and their name/presence
+                    const container = this.add.container(
                         (playerData.x * this.gridSize) + (this.gridSize / 2),
-                        (playerData.y * this.gridSize) + this.gridSize,
-                        'player'
+                        (playerData.y * this.gridSize) + this.gridSize
                     );
+
+                    // Create player sprite
+                    const sprite = this.add.sprite(0, 0, 'player') as Phaser.GameObjects.Sprite;
                     sprite.setOrigin(0.5, 1.0);
-                    sprite.setDepth(this.PLAYER_DEPTH);
-                    this.otherPlayers[uid] = sprite;
+                    container.add(sprite);
+
+                    // Create name container
+                    const nameContainer = this.add.container(0, -57); // -25 - 32 to move it up one unit
+
+                    // Create name text
+                    const nameText = this.add.text(8, 0, playerData.name || 'Anonymous', {
+                        fontFamily: 'Arial',
+                        fontSize: '12px',
+                        color: '#ffffff'
+                    }) as Phaser.GameObjects.Text;
+                    nameText.setOrigin(0, 0.5);
+
+                    // Create background for name and presence indicator
+                    const padding = 16;
+                    const dotSize = 8;
+                    const nameBackground = this.add.rectangle(
+                        nameText.width/2 + padding/2 - dotSize,
+                        0,
+                        nameText.width + padding + dotSize,
+                        16,
+                        0x000000,
+                        0.5
+                    );
+                    nameBackground.setOrigin(0.5, 0.5);
+
+                    // Create presence indicator
+                    const presenceIndicator = this.add.circle(0, 0, 4, 0xffa500);
+
+                    // Add everything to the name container
+                    nameContainer.add([nameBackground, presenceIndicator, nameText]);
+                    container.add(nameContainer);
+
+                    // Set container depth
+                    container.setDepth(this.PLAYER_DEPTH);
+
+                    // Store references
+                    this.otherPlayers[uid] = {
+                        container,
+                        sprite,
+                        nameText,
+                        presenceIndicator
+                    };
+
+                    // Set up presence subscription
+                    const presenceRef = ref(database, `players/${uid}/lastSeenAt`);
+                    onValue(presenceRef, (snapshot) => {
+                        const lastSeenAt = snapshot.val();
+                        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+                        const color = lastSeenAt && lastSeenAt > fiveMinutesAgo ? 0x00ff00 : 0xffa500;
+                        presenceIndicator.setFillStyle(color);
+                    });
                 }
 
-                const sprite = this.otherPlayers[uid];
+                const playerObj = this.otherPlayers[uid];
                 
                 // Update position with tween if moving
                 if (playerData.moving) {
                     this.add.tween({
-                        targets: sprite,
+                        targets: playerObj.container,
                         x: (playerData.x * this.gridSize) + (this.gridSize / 2),
                         y: (playerData.y * this.gridSize) + this.gridSize,
                         duration: this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN,
                         ease: 'Linear',
                         onComplete: () => {
-                            sprite.play(`idle-${playerData.direction}`);
+                            (playerObj.sprite as any).play(`idle-${playerData.direction}`);
                         }
                     });
-                    sprite.play(`walk-${playerData.direction}`);
+                    (playerObj.sprite as any).play(`walk-${playerData.direction}`);
                 } else {
                     // Update position immediately if not moving
-                    sprite.x = (playerData.x * this.gridSize) + (this.gridSize / 2);
-                    sprite.y = (playerData.y * this.gridSize) + this.gridSize;
-                    sprite.play(`idle-${playerData.direction}`);
+                    playerObj.container.setPosition(
+                        (playerData.x * this.gridSize) + (this.gridSize / 2),
+                        (playerData.y * this.gridSize) + this.gridSize
+                    );
+                    (playerObj.sprite as any).play(`idle-${playerData.direction}`);
+                }
+
+                // Update name if changed
+                if (playerData.name !== playerObj.nameText.text) {
+                    playerObj.nameText.setText(playerData.name || 'Anonymous');
                 }
             });
 
             // Remove disconnected players
             Object.keys(this.otherPlayers).forEach((uid) => {
                 if (!players[uid]) {
-                    this.otherPlayers[uid].destroy();
+                    this.otherPlayers[uid].container.destroy();
                     delete this.otherPlayers[uid];
                 }
             });
@@ -399,7 +513,7 @@ export class Game extends Scene
         if (direction !== this.facing) {
             this.facing = direction;
         }
-        this.player.play(`walk-${this.facing}`);
+        this.playerSprite.play(`walk-${this.facing}`);
 
         // Calculate target position
         let newX = this.gridPos.x;
@@ -415,7 +529,7 @@ export class Game extends Scene
         // Check if we can move there
         if (!this.canMoveToTile(newX, newY)) {
             setTimeout(() => {
-                this.player.play(`idle-${this.facing}`);
+                this.playerSprite.play(`idle-${this.facing}`);
             }, this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN);
             return false;
         }
@@ -425,10 +539,11 @@ export class Game extends Scene
         this.gridPos.y = newY;
         this.lastMoveTime = now;
         
-        // Update sprite position
+        // Calculate target pixel position
         const pixelX = (this.gridPos.x * this.gridSize) + (this.gridSize / 2);
-        const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize; // Align to bottom of grid
+        const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize;
         
+        // Tween the container position
         this.add.tween({
             targets: this.player,
             x: pixelX,
@@ -436,7 +551,7 @@ export class Game extends Scene
             duration: this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN,
             ease: 'Linear',
             onComplete: () => {
-                this.player.play(`idle-${this.facing}`);
+                this.playerSprite.play(`idle-${this.facing}`);
                 // Update Firebase when movement is complete
                 const uid = this.userId;
                 if (uid) {
@@ -507,7 +622,7 @@ export class Game extends Scene
             `Tilesets loaded: ${this.map.tilesets.length}`,
             `Layers created: ${Object.keys(this.layers).length}`,
             `Player grid position: (${this.gridPos.x}, ${this.gridPos.y})`,
-            `Player pixel position: (${this.player.x}, ${this.player.y})`,
+            `Player pixel position: (${this.player.list[0].x}, ${this.player.list[0].y})`,
             `Player facing: ${this.facing}`,
             'Layers (name: depth, collision):'
         ];
@@ -516,7 +631,7 @@ export class Game extends Scene
             const hasCollision = this.collisionLayers.includes(name);
             debugInfo.push(`- ${name}: depth=${layer.depth}, collision=${hasCollision}`);
         });
-        debugInfo.push(`Player depth: ${this.player.depth}`);
+        debugInfo.push(`Player depth: ${this.player.list[0].depth}`);
 
         // Create a semi-transparent black rectangle for the background
         const padding = { x: 5, y: 5 };
