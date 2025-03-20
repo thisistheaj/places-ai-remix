@@ -59,7 +59,7 @@ export default function Login() {
       
       <Card className="w-full max-w-md border-2 border-purple-500/20 shadow-xl backdrop-blur-sm bg-background/80">
         <CardHeader className="pb-4">
-          <CardTitle className="text-3xl text-center font-pixel text-purple-700">Chiptunes Stack</CardTitle>
+          <CardTitle className="text-3xl text-center font-pixel text-purple-700">Hackerhouse AI</CardTitle>
           <CardDescription className="text-center text-lg mt-2">
             Ready to join the multiplayer adventure? Sign in to start building and playing your game.
           </CardDescription>

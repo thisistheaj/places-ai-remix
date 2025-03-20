@@ -44,7 +44,7 @@ export default function Landing() {
             <div className="relative px-4 pb-8 pt-16 sm:px-6 sm:pb-14 sm:pt-24 lg:px-8 lg:pb-20 lg:pt-32">
               <h1 className="text-center font-pixel tracking-tight sm:text-5xl md:text-6xl lg:text-7xl animate-pixel-float">
                 <span className="block uppercase text-white drop-shadow-md" style={{ textShadow: '4px 4px 0px rgba(0,0,0,0.5)' }}>
-                  Chiptunes Stack
+                  Hackerhouse AI
                 </span>
               </h1>
               <p className="mx-auto mt-6 max-w-lg text-center text-xl text-white sm:max-w-3xl">
@@ -211,7 +211,7 @@ export default function Landing() {
       <footer className="py-6 border-t border-border/40">
         <div className="container mx-auto px-4 sm:px-6">
           <p className="text-center text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Chiptunes Stack. All rights reserved.
+            © {new Date().getFullYear()} Hackerhouse AI. All rights reserved.
           </p>
         </div>
       </footer>

@@ -1,0 +1,5 @@
+/* Add to existing CSS */
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+} 

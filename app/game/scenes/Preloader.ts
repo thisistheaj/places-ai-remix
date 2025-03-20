@@ -44,11 +44,14 @@ export class Preloader extends Scene
         this.load.image('basement', 'tilesets/14_Basement_Shadowless_32x32.png');
         this.load.image('office-tiles', 'tilesets/Modern_Office_Shadowless_32x32.png');
 
-        // Load the player character spritesheet (see app/docs/character-sprites.md for layout details)
-        this.load.spritesheet('player', 'characters/Premade_Character_32x32_01.png', {
-            frameWidth: 32,
-            frameHeight: 64
-        });
+        // Load all player character spritesheets
+        for (let i = 1; i <= 20; i++) {
+            const spriteNum = i.toString().padStart(2, '0');
+            this.load.spritesheet(`player${spriteNum}`, `characters/Premade_Character_32x32_${spriteNum}.png`, {
+                frameWidth: 32,
+                frameHeight: 64
+            });
+        }
     }
 
     create ()
@@ -56,7 +59,6 @@ export class Preloader extends Scene
         //  When all the assets have loaded, it's often worth creating global objects here that the rest of the game can use.
         //  For example, you can define global animations here, so we can use them in other scenes.
 
-        //  Move directly to the Game scene instead of MainMenu
         this.scene.start('Game');
     }
 }

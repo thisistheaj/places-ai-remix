@@ -1,32 +1,33 @@
 export type MessageType = 'global' | 'room' | 'dm' | 'system';
 
-export interface Message {
-  id?: string;
+export interface BaseMessage {
+  id: string;
   uid: string;
+  senderId: string;
   sender: string;
   text: string;
   timestamp: number;
-  type: MessageType;
-  room?: string;
-  targetId?: string;
+  type: 'global' | 'dm' | 'room' | 'system';
 }
 
-export interface GlobalMessage extends Message {
+export interface GlobalMessage extends BaseMessage {
   type: 'global';
 }
 
-export interface RoomMessage extends Message {
+export interface RoomMessage extends BaseMessage {
   type: 'room';
   room: string;
 }
 
-export interface DirectMessage extends Message {
+export interface DirectMessage extends BaseMessage {
   type: 'dm';
   targetId: string;
 }
 
-export interface SystemMessage extends Message {
+export interface SystemMessage extends BaseMessage {
   type: 'system';
 }
+
+export type Message = GlobalMessage | DirectMessage | RoomMessage | SystemMessage;
 
 export type MessageMap = Record<string, Message>; 

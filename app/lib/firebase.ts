@@ -14,11 +14,12 @@ import {
   onValue, 
   DataSnapshot, 
   onDisconnect, 
-  set, 
+  set,
+  push,
   serverTimestamp,
-  remove,
   update
 } from 'firebase/database';
+import { Player, getPresenceStatus } from '~/models/player';
 
 // Declare global window with ENV property
 declare global {
@@ -76,20 +77,10 @@ export const onAuthChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
-// Player tracking functions
-interface Player {
-  lastSeenAt?: number;
-  direction?: string;
-  moving?: boolean;
-  x?: number;
-  y?: number;
-  [key: string]: any;
-}
-
 /**
  * Set up presence tracking for the current user
  * This will update the lastSeenAt timestamp when the user connects
- * and set up an onDisconnect handler to remove it when they disconnect
+ * and set up an onDisconnect handler to update lastLeftAt when they disconnect
  * @param userId The current user's ID
  */
 export const setupPresenceTracking = (userId: string) => {
@@ -97,6 +88,7 @@ export const setupPresenceTracking = (userId: string) => {
   
   const userRef = ref(database, `players/${userId}`);
   const lastSeenAtRef = ref(database, `players/${userId}/lastSeenAt`);
+  const lastLeftAtRef = ref(database, `players/${userId}/lastLeftAt`);
   
   // When the user connects, update their lastSeenAt timestamp
   const updateOnlineStatus = () => {
@@ -104,34 +96,35 @@ export const setupPresenceTracking = (userId: string) => {
     onValue(userRef, (snapshot) => {
       const currentData = snapshot.exists() ? snapshot.val() : {};
       
-      // Update the lastSeenAt timestamp
-      update(userRef, {
-        lastSeenAt: Date.now()
-      });
+      // First update lastSeenAt
+      const now = Date.now();
+      set(lastSeenAtRef, now);
       
-      // Set up an onDisconnect handler to remove the lastSeenAt property when they disconnect
-      // This will trigger when the user closes their browser tab
-      onDisconnect(lastSeenAtRef).remove();
+      // Then set up onDisconnect handler to update lastLeftAt when they disconnect
+      onDisconnect(lastLeftAtRef).set(Date.now());
     }, { onlyOnce: true });
   };
-  
-  // Set up a heartbeat to update the lastSeenAt timestamp periodically
-  // This ensures the user is still considered "connected" even if they're inactive
-  const heartbeatInterval = setInterval(() => {
-    update(userRef, {
-      lastSeenAt: Date.now()
-    });
-  }, 60000); // Update every minute
   
   // Call the update function immediately
   updateOnlineStatus();
   
   // Return a cleanup function
   return () => {
-    clearInterval(heartbeatInterval);
-    // Remove lastSeenAt when the component unmounts
-    remove(lastSeenAtRef);
+    // Update lastLeftAt when the component unmounts
+    set(lastLeftAtRef, Date.now());
   };
+};
+
+/**
+ * Update lastSeenAt timestamp for a user
+ * This should be called when the user performs actions like:
+ * - Moving
+ * - Sending messages
+ * - Any other activity that should indicate presence
+ */
+export const updateLastSeen = (userId: string) => {
+  const userRef = ref(database, `players/${userId}/lastSeenAt`);
+  return set(userRef, Date.now());
 };
 
 /**
@@ -148,10 +141,11 @@ export const subscribeToConnectedPlayers = (
     if (snapshot.exists()) {
       const playersData = snapshot.val() as Record<string, Player>;
       
-      // Count only players that have the lastSeenAt property set
+      // Count only players that are considered online
       let activeCount = 0;
       Object.values(playersData).forEach((player) => {
-        if (player.lastSeenAt) {
+        const status = getPresenceStatus(player);
+        if (status === 'online') {
           activeCount++;
         }
       });
@@ -200,5 +194,15 @@ export const updatePlayerPosition = (
   return update(playerRef, { x, y, direction, moving });
 };
 
-// Export the Firebase instances for direct access if needed
-export { auth, database, ref, onValue }; 
+/**
+ * Update player skin
+ * @param uid Player's user ID
+ * @param skin Skin number (01-20)
+ */
+export const updatePlayerSkin = (uid: string, skin: string) => {
+  const playerRef = ref(database, `players/${uid}`);
+  return update(playerRef, { skin });
+};
+
+// DO NOT import these elsewhere
+export { database, push, onValue, ref, set, update, serverTimestamp };
