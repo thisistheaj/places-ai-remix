@@ -39,7 +39,8 @@ export const createOrUpdateUserProfile = async (user: User): Promise<Player> => 
         direction: 'down',
         moving: false,
         room: null,
-        lastSeenAt: Date.now()
+        lastSeenAt: Date.now(),
+        skin: '01' // Default skin
       };
       
       await set(userRef, newUserData);

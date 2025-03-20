@@ -287,29 +287,32 @@ export class Game extends Scene
     }
 
     createAnimations() {
-        // Create idle animations
-        ['right', 'up', 'left', 'down'].forEach((direction, index) => {
-            this.anims.create({
-                key: `idle-${direction}`,
-                frames: this.anims.generateFrameNumbers('player', { 
-                    start: 56 + (index * 6), 
-                    end: 61 + (index * 6) 
-                }),
-                frameRate: this.IDLE_FRAME_RATE,
-                repeat: -1
-            });
+        // Create idle animations for all character skins
+        for (let i = 1; i <= 20; i++) {
+            const spriteNum = i.toString().padStart(2, '0');
+            ['right', 'up', 'left', 'down'].forEach((direction, index) => {
+                this.anims.create({
+                    key: `idle-${direction}-${spriteNum}`,
+                    frames: this.anims.generateFrameNumbers(`player${spriteNum}`, { 
+                        start: 56 + (index * 6), 
+                        end: 61 + (index * 6) 
+                    }),
+                    frameRate: this.IDLE_FRAME_RATE,
+                    repeat: -1
+                });
 
-            // Create walk animations
-            this.anims.create({
-                key: `walk-${direction}`,
-                frames: this.anims.generateFrameNumbers('player', { 
-                    start: 112 + (index * 6), 
-                    end: 117 + (index * 6) 
-                }),
-                frameRate: this.WALK_FRAME_RATE,
-                repeat: -1
+                // Create walk animations
+                this.anims.create({
+                    key: `walk-${direction}-${spriteNum}`,
+                    frames: this.anims.generateFrameNumbers(`player${spriteNum}`, { 
+                        start: 112 + (index * 6), 
+                        end: 117 + (index * 6) 
+                    }),
+                    frameRate: this.WALK_FRAME_RATE,
+                    repeat: -1
+                });
             });
-        });
+        }
     }
 
     private canMoveToTile(x: number, y: number): boolean {
@@ -333,11 +336,14 @@ export class Game extends Scene
             return false;
         }
 
+        // Get current skin number
+        const skinNum = this.playerSprite.texture.key.replace('player', '');
+
         // If facing different direction, just turn and start appropriate animation
         if (direction !== this.facing) {
             this.facing = direction;
         }
-        this.playerSprite.play(`walk-${this.facing}`);
+        this.playerSprite.play(`walk-${this.facing}-${skinNum}`);
 
         // Calculate target position
         let newX = this.gridPos.x;
@@ -353,7 +359,7 @@ export class Game extends Scene
         // Check if we can move there
         if (!this.canMoveToTile(newX, newY)) {
             setTimeout(() => {
-                this.playerSprite.play(`idle-${this.facing}`);
+                this.playerSprite.play(`idle-${this.facing}-${skinNum}`);
             }, this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN);
             return false;
         }
@@ -378,7 +384,7 @@ export class Game extends Scene
                 this.updatePlayerDepth(this.player);
             },
             onComplete: () => {
-                this.playerSprite.play(`idle-${this.facing}`);
+                this.playerSprite.play(`idle-${this.facing}-${skinNum}`);
                 this.updatePlayerDepth(this.player);
                 // Update Firebase when movement is complete
                 const uid = this.userId;
@@ -586,7 +592,22 @@ export class Game extends Scene
 
             // Update our own position if this is our first time seeing it
             if (uid === this.userId && playerData) {
-                this.updateOwnInitialPosition(playerData);
+                // Always update our own skin even after initial position
+                const skinNum = playerData.skin?.padStart(2, '0') || '01';
+                if (this.playerSprite.texture.key !== `player${skinNum}`) {
+                    this.playerSprite.setTexture(`player${skinNum}`);
+                    // Restart the current animation with the new skin
+                    if (this.isMoving) {
+                        this.playerSprite.play(`walk-${this.facing}-${skinNum}`);
+                    } else {
+                        this.playerSprite.play(`idle-${this.facing}-${skinNum}`);
+                    }
+                }
+
+                // Only update position if this is our first time
+                if (this.lastMoveTime === 0) {
+                    this.updateOwnInitialPosition(playerData);
+                }
                 return;
             }
 
@@ -616,7 +637,11 @@ export class Game extends Scene
             this.player.setPosition(pixelX, pixelY);
             this.updatePlayerDepth(this.player);
             this.facing = playerData.direction as Direction || 'down';
-            this.playerSprite.play(`idle-${this.facing}`);
+            
+            // Use the player's selected skin or default to '01'
+            const skinNum = playerData.skin?.padStart(2, '0') || '01';
+            this.playerSprite.setTexture(`player${skinNum}`);
+            this.playerSprite.play(`idle-${this.facing}-${skinNum}`);
             
             // Update player name if it exists
             const nameContainer = (this.player as Phaser.GameObjects.Container).getAt(1) as Phaser.GameObjects.Container;
@@ -665,8 +690,9 @@ export class Game extends Scene
         );
         this.updatePlayerDepth(container);
 
-        // Create player sprite
-        const sprite = this.add.sprite(0, 0, 'player');
+        // Create player sprite with the selected skin or default
+        const skinNum = playerData.skin?.padStart(2, '0') || '01';
+        const sprite = this.add.sprite(0, 0, `player${skinNum}`);
         sprite.setOrigin(0.5, 1.0);
         container.add(sprite);
 
@@ -713,6 +739,12 @@ export class Game extends Scene
 
     private updateExistingPlayer(uid: string, playerData: Player) {
         const playerObj = this.otherPlayers[uid];
+        const skinNum = playerData.skin?.padStart(2, '0') || '01';
+        
+        // Update sprite texture if skin changed
+        if (playerObj.sprite.texture.key !== `player${skinNum}`) {
+            playerObj.sprite.setTexture(`player${skinNum}`);
+        }
         
         // Update position with tween if moving
         if (playerData.moving) {
@@ -726,11 +758,11 @@ export class Game extends Scene
                     this.updatePlayerDepth(playerObj.container);
                 },
                 onComplete: () => {
-                    (playerObj.sprite as any).play(`idle-${playerData.direction}`);
+                    (playerObj.sprite as any).play(`idle-${playerData.direction}-${skinNum}`);
                     this.updatePlayerDepth(playerObj.container);
                 }
             });
-            (playerObj.sprite as any).play(`walk-${playerData.direction}`);
+            (playerObj.sprite as any).play(`walk-${playerData.direction}-${skinNum}`);
         } else {
             // Update position immediately if not moving
             playerObj.container.setPosition(
@@ -738,7 +770,7 @@ export class Game extends Scene
                 (playerData.y * this.gridSize) + this.gridSize
             );
             this.updatePlayerDepth(playerObj.container);
-            (playerObj.sprite as any).play(`idle-${playerData.direction}`);
+            (playerObj.sprite as any).play(`idle-${playerData.direction}-${skinNum}`);
         }
 
         // Update name if changed

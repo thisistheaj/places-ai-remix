@@ -15,6 +15,7 @@ export interface Player {
   room: string | null;
   lastSeenAt: number;
   lastLeftAt?: number;
+  skin?: string; // Character skin number (01-20)
 }
 
 export interface PlayerPosition {

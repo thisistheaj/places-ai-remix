@@ -194,5 +194,15 @@ export const updatePlayerPosition = (
   return update(playerRef, { x, y, direction, moving });
 };
 
+/**
+ * Update player skin
+ * @param uid Player's user ID
+ * @param skin Skin number (01-20)
+ */
+export const updatePlayerSkin = (uid: string, skin: string) => {
+  const playerRef = ref(database, `players/${uid}`);
+  return update(playerRef, { skin });
+};
+
 // DO NOT import these elsewhere
 export { database, push, onValue, ref, set, update, serverTimestamp };
