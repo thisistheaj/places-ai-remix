@@ -93,16 +93,14 @@
 - [x] Other players' movements are visible in real-time
 
 ### 3.3 Room Detection
-- [ ] Implement room entry/exit detection
-- [ ] Create visual indicators for room boundaries
-- [ ] Update player's current room in Firebase
-- [ ] Trigger events on room change via EventBus
+- [x] Implement room entry/exit detection
+- [x] Update player's current room in Firebase
+- [x] Trigger events on room change via EventBus
 
 #### Acceptance Criteria:
-- [ ] System detects when player enters or exits a room
-- [ ] Room boundaries are visually clear to users
-- [ ] Player's current room is updated in Firebase
-- [ ] Room change events trigger appropriate UI updates
+- [x] System detects when player enters or exits a room
+- [x] Player's current room is updated in Firebase
+- [x] Room change events trigger appropriate UI updates
 
 ### 3.4 Player Data Management
 - [x] Extend Firebase module with player data functions
@@ -113,7 +111,7 @@
 #### Acceptance Criteria:
 - [x] Player data is stored in Firebase with proper structure
 - [x] Player position and direction are updated in real-time
-- [ ] Player room changes are reflected in the database
+- [x] Player room changes are reflected in the database
 - [x] Other players' movements are visible to all users
 - [x] Player data is properly typed with TypeScript interfaces
 
@@ -134,7 +132,7 @@
 
 ### 4.2 Chat Context Switching
 - [x] Implement global chat
-- [ ] Create room-specific chat channels
+- [x] Create room-specific chat channels
 - [x] Implement direct messaging between nearby players
 - [x] Handle context switching based on player location
 
@@ -177,18 +175,18 @@
 - [x] Extend Firebase module with presence functions
 - [x] Implement lastSeenAt timestamp updates
 - [x] Create presence indicators (green/yellow) above players in game
-- [ ] [TST THIS] Add presence indicators next to user names in chat
+- [x] Add presence indicators next to user names in chat
 - [x] Set up disconnect handlers for Firebase
 - [x] Implement presence polling
 
 #### Acceptance Criteria:
-- [ ] Player's lastSeenAt is updated at regular intervals
-- [ ] Presence indicator shows green when user is active (seen in last 5 minutes)
-- [ ] Presence indicator shows yellow when user is inactive
-- [ ] Presence indicators are consistent between game and chat
-- [ ] Player data is removed when disconnected
-- [ ] Other players can see presence status in real-time
-- [ ] Presence functions are properly typed with TypeScript interfaces
+- [x] Player's lastSeenAt is updated at regular intervals
+- [x] Presence indicator shows green when user is active (seen in last 5 minutes)
+- [x] Presence indicator shows yellow when user is inactive
+- [x] Presence indicators are consistent between game and chat
+- [x] Player data is removed when disconnected
+- [x] Other players can see presence status in real-time
+- [x] Presence functions are properly typed with TypeScript interfaces
 
 ## 6. Bot Integration
 
@@ -272,10 +270,10 @@
 
 ## Future works
 -[x] test presence
--[ ] profile and character selection
--[ ] room detection
+-[x] profile and character selection
+-[x] room detection
+-[ ] deploy 
 -[ ] implement API
 -[ ] Implement AI
 -[ ] Implement Tool use
 -[ ] firebase security
--[ ] deploy 
