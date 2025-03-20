@@ -28,6 +28,7 @@ export class Game extends Scene
     player: Phaser.GameObjects.Container;
     playerSprite: Phaser.GameObjects.Sprite;
     userId: string | null = null;
+    currentRoom: string | null = null;
     
     // Other players with their containers and components
     otherPlayers: {
@@ -160,6 +161,7 @@ export class Game extends Scene
             // Handle flat layer structure
             mapLayers.forEach(layer => {
                 const createdLayer = this.map.createLayer(layer.name, tilesets, 0, 0);
+                console.log('Created layer:', layer.name);
                 if (!createdLayer) throw new Error(`Failed to create layer: ${layer.name}`);
                 this.layers[layer.name] = createdLayer;
             });
@@ -284,6 +286,11 @@ export class Game extends Scene
             unsubscribe();
         });
         
+        // Set up room detection
+        const roomsLayer = this.map.getObjectLayer('Conference/Rooms');
+        if (!roomsLayer) {
+            console.warn('No Rooms layer found in tilemap');
+        }
     }
 
     createAnimations() {
@@ -432,6 +439,9 @@ export class Game extends Scene
             this.tryMove('down');
         }
 
+        // Check room bounds after movement
+        this.checkRoomBounds();
+
         // Update debug visuals if enabled
         if (DEBUG_ENABLED) {
             this.updateDebugVisuals();
@@ -467,6 +477,22 @@ export class Game extends Scene
             const targetCellX = targetX * this.gridSize;
             const targetCellY = targetY * this.gridSize;
             this.debugGraphics.strokeRect(targetCellX, targetCellY, this.gridSize, this.gridSize);
+        }
+
+        // Draw room boundaries if in debug mode
+        if (this.map.getObjectLayer('Conference/Rooms')) {
+            this.map.getObjectLayer('Conference/Rooms')?.objects.forEach(room => {
+                if (room.x === undefined || room.y === undefined || 
+                    room.width === undefined || room.height === undefined) return;
+
+                this.debugGraphics.lineStyle(2, 0x00ff00, 0.3);
+                this.debugGraphics.strokeRect(room.x, room.y, room.width, room.height);
+                
+                if (room.name === this.currentRoom) {
+                    this.debugGraphics.lineStyle(2, 0x00ff00, 0.8);
+                    this.debugGraphics.strokeRect(room.x, room.y, room.width, room.height);
+                }
+            });
         }
     }
 
@@ -781,5 +807,41 @@ export class Game extends Scene
         // Update presence indicator color
         const newStatus = getPresenceStatus(playerData);
         playerObj.presenceIndicator.setFillStyle(getPresenceColor(newStatus));
+    }
+
+    private checkRoomBounds() {
+        if (!this.map) return;
+
+        const roomsLayer = this.map.getObjectLayer('Conference/Rooms');
+        if (!roomsLayer) return;
+
+        const playerX = this.player.x;
+        const playerY = this.player.y;
+        let newRoom: string | null = null;
+
+        // Check if player is in any room
+        roomsLayer.objects.forEach(room => {
+            if (room.x === undefined || room.y === undefined || 
+                room.width === undefined || room.height === undefined || 
+                !room.name) return;
+
+            if (playerX >= room.x && 
+                playerX <= room.x + room.width &&
+                playerY >= room.y && 
+                playerY <= room.y + room.height) {
+                newRoom = room.name;
+            }
+        });
+
+        // If room changed, emit event
+        if (newRoom !== this.currentRoom) {
+            const oldRoom = this.currentRoom;
+            this.currentRoom = newRoom;
+            EventBus.emit('room-changed', { 
+                oldRoom, 
+                newRoom,
+                userId: this.userId 
+            });
+        }
     }
 }

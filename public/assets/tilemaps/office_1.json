@@ -435,6 +435,116 @@
                  "y":0
                 }, 
                 {
+                 "draworder":"topdown",
+                 "id":50,
+                 "name":"Rooms",
+                 "objects":[
+                        {
+                         "height":255.714839209609,
+                         "id":9,
+                         "name":"Room 1",
+                         "rotation":0,
+                         "type":"",
+                         "visible":true,
+                         "width":315.769081751259,
+                         "x":643.161565284773,
+                         "y":350.639287098024
+                        }, 
+                        {
+                         "height":251.840371948857,
+                         "id":10,
+                         "name":"Room 2",
+                         "rotation":0,
+                         "type":"",
+                         "visible":true,
+                         "width":304.145679969004,
+                         "x":970.554048818287,
+                         "y":352.5765207284
+                        }, 
+                        {
+                         "height":251.840371948857,
+                         "id":11,
+                         "name":"Room 3",
+                         "rotation":0,
+                         "type":"",
+                         "visible":true,
+                         "width":317.706315381635,
+                         "x":641.224331654397,
+                         "y":672.220069740411
+                        }, 
+                        {
+                         "height":251.840371948857,
+                         "id":12,
+                         "name":"Room 4",
+                         "rotation":0,
+                         "type":"",
+                         "visible":true,
+                         "width":304.145679969004,
+                         "x":972.491282448663,
+                         "y":672.220069740411
+                        }, 
+                        {
+                         "height":176.2882603642,
+                         "id":13,
+                         "name":"Kitchen",
+                         "rotation":0,
+                         "type":"",
+                         "visible":true,
+                         "width":313.831848120883,
+                         "x":805.889190236343,
+                         "y":42.6191398682681
+                        }, 
+                        {
+                         "height":154.978690430066,
+                         "id":14,
+                         "name":"Lounge",
+                         "rotation":0,
+                         "type":"",
+                         "visible":true,
+                         "width":308.020147229756,
+                         "x":807.826423866718,
+                         "y":966.679581557536
+                        }, 
+                        {
+                         "height":0,
+                         "id":15,
+                         "name":"",
+                         "rotation":0,
+                         "type":"",
+                         "visible":true,
+                         "width":0,
+                         "x":782.642386671833,
+                         "y":319.643549012011
+                        }, 
+                        {
+                         "height":0,
+                         "id":16,
+                         "name":"",
+                         "rotation":0,
+                         "type":"",
+                         "visible":true,
+                         "width":0,
+                         "x":774.893452150329,
+                         "y":439.752034095312
+                        }, 
+                        {
+                         "height":0,
+                         "id":17,
+                         "name":"",
+                         "rotation":0,
+                         "type":"",
+                         "visible":true,
+                         "width":0,
+                         "x":645.098798915149,
+                         "y":439.752034095312
+                        }],
+                 "opacity":1,
+                 "type":"objectgroup",
+                 "visible":true,
+                 "x":0,
+                 "y":0
+                }, 
+                {
                  "data":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -2042,8 +2152,8 @@
          "x":0,
          "y":0
         }],
- "nextlayerid":50,
- "nextobjectid":1,
+ "nextlayerid":51,
+ "nextobjectid":18,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.11.2",
@@ -2052,7 +2162,7 @@
         {
          "columns":16,
          "firstgid":1,
-         "image": "/Downloads/assets/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_Shadowless_32x32/1_Generic_Shadowless32x32.png",
+         "image": "Downloads/assets/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_Shadowless_32x32/1_Generic_Shadowless32x32.png",
          "imageheight":2496,
          "imagewidth":512,
          "margin":0,
@@ -2065,7 +2175,7 @@
         {
          "columns":16,
          "firstgid":1249,
-         "image": "/Downloads/assets/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_Shadowless_32x32/2_LivingRoom_Shadowless_32x32.png",
+         "image": "Downloads/assets/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_Shadowless_32x32/2_LivingRoom_Shadowless_32x32.png",
          "imageheight":1440,
          "imagewidth":512,
          "margin":0,
@@ -2078,7 +2188,7 @@
         {
          "columns":16,
          "firstgid":1969,
-         "image": "/Downloads/assets/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_Shadowless_32x32/12_Kitchen_Shadowless_32x32.png",
+         "image": "Downloads/assets/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_Shadowless_32x32/12_Kitchen_Shadowless_32x32.png",
          "imageheight":1568,
          "imagewidth":512,
          "margin":0,
@@ -2091,7 +2201,7 @@
         {
          "columns":16,
          "firstgid":2753,
-         "image": "/Downloads/assets/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_Shadowless_32x32/14_Basement_Shadowless_32x32.png",
+         "image": "Downloads/assets/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_Shadowless_32x32/14_Basement_Shadowless_32x32.png",
          "imageheight":1600,
          "imagewidth":512,
          "margin":0,
@@ -2104,7 +2214,7 @@
         {
          "columns":16,
          "firstgid":3553,
-         "image": "/Downloads/assets/Modern_Office_Revamped_v1.2/3_Modern_Office_Shadowless/Modern_Office_Shadowless_32x32.png",
+         "image": "Downloads/assets/Modern_Office_Revamped_v1.2/3_Modern_Office_Shadowless/Modern_Office_Shadowless_32x32.png",
          "imageheight":1696,
          "imagewidth":512,
          "margin":0,

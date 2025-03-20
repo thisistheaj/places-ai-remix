@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '~/lib/auth';
-import { subscribeToMessages, sendGlobalMessage, sendDirectMessage, PATHS, getUserColor, subscribeToDmUsers, subscribeToUserSearch } from '~/lib/chat';
+import { subscribeToMessages, sendGlobalMessage, sendDirectMessage, sendRoomMessage, PATHS, getUserColor, subscribeToDmUsers, subscribeToUserSearch } from '~/lib/chat';
 import type { Message } from '~/models/message';
 import { EventBus } from '~/game/EventBus';
 import { useDebounce } from '~/hooks/useDebounce';
@@ -17,6 +17,12 @@ interface DmUser {
   name: string;
 }
 
+interface RoomChangeEvent {
+  oldRoom: string | null;
+  newRoom: string | null;
+  userId: string | null;
+}
+
 export function Chat() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -31,6 +37,7 @@ export function Chat() {
   });
   const [nearbyPlayer, setNearbyPlayer] = useState<NearbyPlayer | null>(null);
   const [manualDmUser, setManualDmUser] = useState<DmUser | null>(null);
+  const [currentRoom, setCurrentRoom] = useState<string | null>(null);
   const [dmUsers, setDmUsers] = useState<DmUser[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -38,8 +45,11 @@ export function Chat() {
   const debouncedSearch = useDebounce(searchTerm, 300);
   const [players, setPlayers] = useState<Record<string, Player>>({});
   
-  // The current chat partner, either from proximity or manual selection
+  // The current chat context: room > manual DM > nearby player > global
   const currentChatPartner = manualDmUser || nearbyPlayer;
+  const chatContext = currentRoom ? { type: 'room' as const, room: currentRoom } 
+    : currentChatPartner ? { type: 'dm' as const, partner: currentChatPartner }
+    : { type: 'global' as const };
   
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -59,16 +69,37 @@ export function Chat() {
     return subscribeToDmUsers(user.uid, setDmUsers);
   }, [user]);
 
-  // Subscribe to global messages or DMs based on current chat partner
+  // Subscribe to room changes
+  useEffect(() => {
+    const handleRoomChange = (event: RoomChangeEvent) => {
+      if (event.userId === user?.uid) {
+        setCurrentRoom(event.newRoom);
+        setMessages([]); // Clear messages when changing rooms
+      }
+    };
+    
+    EventBus.on('room-changed', handleRoomChange);
+    return () => {
+      EventBus.off('room-changed', handleRoomChange);
+    };
+  }, [user]);
+
+  // Subscribe to messages based on current context
   useEffect(() => {
     if (!user) return;
     
-    const unsubscribe = currentChatPartner 
-      ? subscribeToMessages(PATHS.dm(user.uid, currentChatPartner.id), setMessages)
-      : subscribeToMessages(PATHS.global, setMessages);
-      
+    let path: string;
+    if (chatContext.type === 'room' && chatContext.room) {
+      path = PATHS.room(chatContext.room);
+    } else if (chatContext.type === 'dm' && chatContext.partner) {
+      path = PATHS.dm(user.uid, chatContext.partner.id);
+    } else {
+      path = PATHS.global;
+    }
+    
+    const unsubscribe = subscribeToMessages(path, setMessages);
     return () => unsubscribe();
-  }, [user, currentChatPartner]);
+  }, [user, chatContext]);
   
   // Listen for nearby player updates from the game scene
   useEffect(() => {
@@ -118,8 +149,12 @@ export function Chat() {
   if (!user) return null;
   
   const handleSendMessage = (text: string) => {
-    if (currentChatPartner) {
-      sendDirectMessage(text, user.uid, user.displayName || 'Anonymous', currentChatPartner.id);
+    if (!user) return;
+    
+    if (chatContext.type === 'room' && chatContext.room) {
+      sendRoomMessage(text, user.uid, user.displayName || 'Anonymous', chatContext.room);
+    } else if (chatContext.type === 'dm' && chatContext.partner) {
+      sendDirectMessage(text, user.uid, user.displayName || 'Anonymous', chatContext.partner.id);
     } else {
       sendGlobalMessage(text, user.uid, user.displayName || 'Anonymous');
     }
@@ -149,8 +184,8 @@ export function Chat() {
   
   return (
     <div className="fixed bottom-4 right-4 flex flex-col gap-2">
-      {/* Users and Search Box - only show when not in a manual DM */}
-      {!manualDmUser && !nearbyPlayer && (
+      {/* Users and Search Box - only show when not in a room or DM */}
+      {!currentRoom && !manualDmUser && !nearbyPlayer && (
         <div className="w-80 bg-[rgba(30,30,50,0.9)] backdrop-blur-sm border border-[rgba(217,70,239,0.3)] rounded-lg shadow-lg overflow-hidden">
           {/* Header */}
           <button
@@ -230,13 +265,15 @@ export function Chat() {
               <div 
                 className="w-2 h-2 rounded-full" 
                 style={{ 
-                  backgroundColor: currentChatPartner 
-                    ? getPlayerPresenceColor(currentChatPartner.id)
+                  backgroundColor: chatContext.type === 'dm' && chatContext.partner
+                    ? getPlayerPresenceColor(chatContext.partner.id)
                     : '#00ff00'
                 }}
               ></div>
               <span className="font-medium text-[#d946ef]">
-                {currentChatPartner ? `Chat with ${currentChatPartner.name}` : 'Public Chat'}
+                {chatContext.type === 'room' ? `${chatContext.room} Chat`
+                  : chatContext.type === 'dm' ? `Chat with ${chatContext.partner.name}`
+                  : 'Public Chat'}
               </span>
             </div>
             <span className="text-sm text-[#d946ef] opacity-50">
@@ -262,8 +299,8 @@ export function Chat() {
             <div className="flex-1 overflow-y-auto p-4">
               {messages.length === 0 && (
                 <div className="text-[rgba(217,70,239,0.5)] italic text-center">
-                  {currentChatPartner 
-                    ? `Start a private conversation with ${currentChatPartner.name}`
+                  {chatContext.type === 'dm' && chatContext.partner
+                    ? `Start a private conversation with ${chatContext.partner.name}`
                     : 'No messages yet'}
                 </div>
               )}
@@ -297,7 +334,7 @@ export function Chat() {
                 <input
                   type="text"
                   name="message"
-                  placeholder={currentChatPartner ? `Message ${currentChatPartner.name}...` : "Type a message..."}
+                  placeholder={chatContext.type === 'dm' && chatContext.partner ? `Message ${chatContext.partner.name}...` : "Type a message..."}
                   className="w-full p-2 rounded bg-[rgba(30,30,50,0.8)] border border-[rgba(217,70,239,0.3)] text-white placeholder-[rgba(217,70,239,0.5)] focus:border-[rgba(217,70,239,0.5)] focus:outline-none"
                 />
               </form>

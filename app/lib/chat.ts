@@ -1,5 +1,5 @@
 import { database, ref, onValue, push, serverTimestamp } from './firebase';
-import type { Message, GlobalMessage, DirectMessage } from '../models/message';
+import type { Message, GlobalMessage, DirectMessage, RoomMessage } from '../models/message';
 
 // Firebase paths
 export const PATHS = {
@@ -8,7 +8,8 @@ export const PATHS = {
     // Sort UIDs to ensure consistent path regardless of sender/receiver order
     const [first, second] = [uid1, uid2].sort();
     return `messages/dm/${first}_${second}`;
-  }
+  },
+  room: (roomName: string) => `messages/rooms/${roomName}`
 } as const;
 
 // Generate a consistent color for a user based on their ID
@@ -94,6 +95,26 @@ export async function sendDirectMessage(
   };
   
   await push(ref(database, PATHS.dm(senderId, receiverId)), message);
+}
+
+// Send a room message
+export async function sendRoomMessage(
+  text: string,
+  senderId: string,
+  senderName: string,
+  room: string
+): Promise<void> {
+  const message: Omit<RoomMessage, 'id'> = {
+    uid: senderId,
+    senderId,
+    sender: senderName,
+    text,
+    timestamp: Date.now(),
+    type: 'room',
+    room
+  };
+  
+  await push(ref(database, PATHS.room(room)), message);
 }
 
 // Update user's last seen timestamp
