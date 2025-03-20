@@ -5,6 +5,7 @@ import App from '~/app.client';
 import { useAuth } from '~/lib/auth';
 import { signOut, updatePlayerSkin } from '~/lib/firebase';
 import { Button } from '~/components/ui/button';
+import { CharacterPreview } from '~/components/CharacterPreview';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,14 +104,17 @@ export default function Game() {
                       </div>
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuContent align="end" className="w-56">
                     {availableSkins.map((skin) => (
                       <DropdownMenuItem
                         key={skin}
                         onClick={() => handleSkinChange(skin)}
-                        className={`cursor-pointer ${playerProfile?.skin === skin ? 'bg-purple-500/20' : ''}`}
+                        className={`cursor-pointer flex items-center gap-3 ${playerProfile?.skin === skin ? 'bg-purple-500/20' : ''}`}
                       >
-                        Character {skin}
+                        <div className="flex-shrink-0">
+                          <CharacterPreview skinNumber={skin} size={24} />
+                        </div>
+                        <span>Skin {skin}</span>
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
