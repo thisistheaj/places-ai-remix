@@ -3,7 +3,7 @@ import { Scene } from 'phaser';
 import { subscribeToPlayers, updatePlayerPosition, updateLastSeen } from '~/lib/firebase';
 import { Player, getPresenceStatus, getPresenceColor } from '~/models/player';
 
-const DEBUG_ENABLED = true; // Toggle all debug visualizations
+const DEBUG_ENABLED = false; // Toggle all debug visualizations
 
 interface TiledLayerData extends Phaser.Tilemaps.LayerData {
     type?: string;
@@ -232,47 +232,9 @@ export class Game extends Scene
             this.debugGraphics.setDepth(this.PLAYER_DEPTH - 0.1);
         }
 
-        // todo: move to its own function
-        // Enable collision for specified layers
-        Object.entries(this.layers).forEach(([layerPath, layer]) => {
-            if (!layer || !(layer instanceof Phaser.Tilemaps.TilemapLayer)) {
-                console.warn(`Invalid layer at ${layerPath}`);
-                return;
-            }
-            
-            if (this.collisionLayers.includes(layerPath)) {
-                
-                // Debug: Check tile properties
-                const nonEmptyTiles = layer.filterTiles((tile: Phaser.Tilemaps.Tile) => tile.index !== -1);
-                
-                // Enable collision for all non-empty tiles
-                layer.setCollisionByExclusion([-1]);
-                
-                // Debug: Verify collision was set
-                const collisionTiles = layer.filterTiles((tile: Phaser.Tilemaps.Tile) => tile.collides);
-                
-                // Add collider with player sprite
-                const collider = this.physics.add.collider(this.playerSprite, layer);
-                
-                // Debug: Draw collision boxes if debug is enabled
-                if (DEBUG_ENABLED) {
-                    const debugGraphics = this.add.graphics().setAlpha(0.75);
-                    layer.renderDebug(debugGraphics, {
-                        tileColor: null,
-                        collidingTileColor: new Phaser.Display.Color(243, 134, 48, 255),
-                        faceColor: new Phaser.Display.Color(40, 39, 37, 255)
-                    });
-                }
-            }
-            
-            if (this.abovePlayerLayers.includes(layerPath)) {
-                layer.setDepth(this.PLAYER_DEPTH + 2001);
-            } else if (this.abovePlayerDecorLayers.includes(layerPath)) {
-                layer.setDepth(this.PLAYER_DEPTH + 2002);
-            } else {
-                layer.setDepth(0);
-            }
-        });
+        // Set up collision detection
+        this.handleCollisions();
+
 
         // Make camera follow the player container
         this.camera.startFollow(this.player, true);
@@ -312,161 +274,16 @@ export class Game extends Scene
         this.events.on('update', () => {
             this.updatePlayerDepth(this.player);
         });
-
-        // todo: move to its own function
         // Subscribe to player updates
         const unsubscribe = subscribeToPlayers((players) => {
-            Object.entries(players).forEach(([uid, playerData]) => {
-                // Skip if player data is invalid
-                if (!playerData || typeof playerData.x !== 'number' || typeof playerData.y !== 'number') return;
-
-                // Update our own position if this is our first time seeing it
-                if (uid === this.userId && playerData) {
-                    // Only update if we haven't moved yet (lastMoveTime is 0)
-                    if (this.lastMoveTime === 0 && typeof playerData.x === 'number' && typeof playerData.y === 'number') {
-                        this.gridPos.x = playerData.x;
-                        this.gridPos.y = playerData.y;
-                        const pixelX = (this.gridPos.x * this.gridSize) + (this.gridSize / 2);
-                        const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize;
-                        this.player.setPosition(pixelX, pixelY);
-                        this.updatePlayerDepth(this.player);
-                        this.facing = playerData.direction as Direction || 'down';
-                        this.playerSprite.play(`idle-${this.facing}`);
-                        
-                        // Update player name if it exists
-                        if (playerData.name) {
-                            nameText.setText(playerData.name);
-                            // Recalculate background width
-                            nameBackground.setSize(
-                                nameText.width + padding + dotSize,
-                                16
-                            );
-                            nameBackground.setPosition(nameText.width/2 + padding/2 - dotSize, 0);
-                        }
-                    }
-                    return;
-                }
-
-                // Skip our own player after initial position
-                if (uid === this.userId) return;
-
-                // Check if other player is offline
-                const status = getPresenceStatus(playerData as Player);
-                if (status === 'offline') {
-                    // Remove offline player if they exist
-                    if (this.otherPlayers[uid]) {
-                        this.otherPlayers[uid].container.destroy();
-                        delete this.otherPlayers[uid];
-                    }
-                    return;
-                }
-
-                // Create or update other player
-                if (!this.otherPlayers[uid]) {
-                    // Create container for player and their name/presence
-                    const container = this.add.container(
-                        (playerData.x * this.gridSize) + (this.gridSize / 2),
-                        (playerData.y * this.gridSize) + this.gridSize
-                    );
-                    this.updatePlayerDepth(container);
-
-                    // Create player sprite
-                    const sprite = this.add.sprite(0, 0, 'player') as Phaser.GameObjects.Sprite;
-                    sprite.setOrigin(0.5, 1.0);
-                    container.add(sprite);
-
-                    // Create name container
-                    const nameContainer = this.add.container(0, -57); // -25 - 32 to move it up one unit
-
-                    // Create name text
-                    const nameText = this.add.text(8, 0, playerData.name || 'Anonymous', {
-                        fontFamily: 'Arial',
-                        fontSize: '12px',
-                        color: '#ffffff'
-                    }) as Phaser.GameObjects.Text;
-                    nameText.setOrigin(0, 0.5);
-
-                    // Create background for name and presence indicator
-                    const padding = 16;
-                    const dotSize = 8;
-                    const nameBackground = this.add.rectangle(
-                        nameText.width/2 + padding/2 - dotSize,
-                        0,
-                        nameText.width + padding + dotSize,
-                        16,
-                        0x000000,
-                        0.5
-                    );
-                    nameBackground.setOrigin(0.5, 0.5);
-
-                    // Create presence indicator
-                    const presenceIndicator = this.add.circle(0, 0, 4, getPresenceColor(status));
-
-                    // Add everything to the name container
-                    nameContainer.add([nameBackground, presenceIndicator, nameText]);
-                    container.add(nameContainer);
-
-                    // Store references
-                    this.otherPlayers[uid] = {
-                        container,
-                        sprite,
-                        nameText,
-                        presenceIndicator
-                    };
-                }
-
-                const playerObj = this.otherPlayers[uid];
-                
-                // Update position with tween if moving
-                if (playerData.moving) {
-                    this.add.tween({
-                        targets: playerObj.container,
-                        x: (playerData.x * this.gridSize) + (this.gridSize / 2),
-                        y: (playerData.y * this.gridSize) + this.gridSize,
-                        duration: this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN,
-                        ease: 'Linear',
-                        onUpdate: () => {
-                            this.updatePlayerDepth(playerObj.container);
-                        },
-                        onComplete: () => {
-                            (playerObj.sprite as any).play(`idle-${playerData.direction}`);
-                            this.updatePlayerDepth(playerObj.container);
-                        }
-                    });
-                    (playerObj.sprite as any).play(`walk-${playerData.direction}`);
-                } else {
-                    // Update position immediately if not moving
-                    playerObj.container.setPosition(
-                        (playerData.x * this.gridSize) + (this.gridSize / 2),
-                        (playerData.y * this.gridSize) + this.gridSize
-                    );
-                    this.updatePlayerDepth(playerObj.container);
-                    (playerObj.sprite as any).play(`idle-${playerData.direction}`);
-                }
-
-                // Update name if changed
-                if (playerData.name !== playerObj.nameText.text) {
-                    playerObj.nameText.setText(playerData.name || 'Anonymous');
-                }
-
-                // Update presence indicator color
-                const newStatus = getPresenceStatus(playerData as Player);
-                playerObj.presenceIndicator.setFillStyle(getPresenceColor(newStatus));
-            });
-
-            // Remove disconnected players
-            Object.keys(this.otherPlayers).forEach((uid) => {
-                if (!players[uid]) {
-                    this.otherPlayers[uid].container.destroy();
-                    delete this.otherPlayers[uid];
-                }
-            });
+            this.updateOtherPlayers(players);
         });
 
         // Cleanup subscription when scene is destroyed
         this.events.on('shutdown', () => {
             unsubscribe();
         });
+        
     }
 
     createAnimations() {
@@ -723,5 +540,214 @@ export class Game extends Scene
         // Add a small fraction of X to ensure consistent ordering when players are on the same Y
         const depthValue = (container.y / this.gridSize) + (container.x / (this.gridSize * 1000));
         container.setDepth(this.BASE_PLAYER_DEPTH + depthValue);
+    }
+
+    private handleCollisions() {
+        // Set up collision for specified layers
+        Object.entries(this.layers).forEach(([layerPath, layer]) => {
+            if (!layer || !(layer instanceof Phaser.Tilemaps.TilemapLayer)) {
+                console.warn(`Invalid layer at ${layerPath}`);
+                return;
+            }
+            
+            if (this.collisionLayers.includes(layerPath)) {
+                // Enable collision for all non-empty tiles
+                layer.setCollisionByExclusion([-1]);
+                
+                // Add collider with player sprite
+                this.physics.add.collider(this.playerSprite, layer);
+                
+                // Debug: Draw collision boxes if debug is enabled
+                if (DEBUG_ENABLED) {
+                    const debugGraphics = this.add.graphics().setAlpha(0.75);
+                    layer.renderDebug(debugGraphics, {
+                        tileColor: null,
+                        collidingTileColor: new Phaser.Display.Color(243, 134, 48, 255),
+                        faceColor: new Phaser.Display.Color(40, 39, 37, 255)
+                    });
+                }
+            }
+            
+            // Set layer depths
+            if (this.abovePlayerLayers.includes(layerPath)) {
+                layer.setDepth(this.PLAYER_DEPTH + 2001);
+            } else if (this.abovePlayerDecorLayers.includes(layerPath)) {
+                layer.setDepth(this.PLAYER_DEPTH + 2002);
+            } else {
+                layer.setDepth(0);
+            }
+        });
+    }
+
+    private updateOtherPlayers(players: Record<string, Player>) {
+        Object.entries(players).forEach(([uid, playerData]) => {
+            // Skip if player data is invalid
+            if (!playerData || typeof playerData.x !== 'number' || typeof playerData.y !== 'number') return;
+
+            // Update our own position if this is our first time seeing it
+            if (uid === this.userId && playerData) {
+                this.updateOwnInitialPosition(playerData);
+                return;
+            }
+
+            // Skip our own player after initial position
+            if (uid === this.userId) return;
+
+            // Handle other players
+            this.handleOtherPlayer(uid, playerData);
+        });
+
+        // Remove disconnected players
+        Object.keys(this.otherPlayers).forEach((uid) => {
+            if (!players[uid]) {
+                this.otherPlayers[uid].container.destroy();
+                delete this.otherPlayers[uid];
+            }
+        });
+    }
+
+    private updateOwnInitialPosition(playerData: Player) {
+        // Only update if we haven't moved yet (lastMoveTime is 0)
+        if (this.lastMoveTime === 0 && typeof playerData.x === 'number' && typeof playerData.y === 'number') {
+            this.gridPos.x = playerData.x;
+            this.gridPos.y = playerData.y;
+            const pixelX = (this.gridPos.x * this.gridSize) + (this.gridSize / 2);
+            const pixelY = (this.gridPos.y * this.gridSize) + this.gridSize;
+            this.player.setPosition(pixelX, pixelY);
+            this.updatePlayerDepth(this.player);
+            this.facing = playerData.direction as Direction || 'down';
+            this.playerSprite.play(`idle-${this.facing}`);
+            
+            // Update player name if it exists
+            const nameContainer = (this.player as Phaser.GameObjects.Container).getAt(1) as Phaser.GameObjects.Container;
+            const nameText = nameContainer.getAt(2) as Phaser.GameObjects.Text;
+            const nameBackground = nameContainer.getAt(0) as Phaser.GameObjects.Rectangle;
+            
+            if (playerData.name && nameText && nameBackground) {
+                nameText.setText(playerData.name);
+                // Recalculate background width
+                const padding = 16;
+                const dotSize = 8;
+                nameBackground.setSize(
+                    nameText.width + padding + dotSize,
+                    16
+                );
+                nameBackground.setPosition(nameText.width/2 + padding/2 - dotSize, 0);
+            }
+        }
+    }
+
+    private handleOtherPlayer(uid: string, playerData: Player) {
+        // Check if other player is offline
+        const status = getPresenceStatus(playerData);
+        if (status === 'offline') {
+            // Remove offline player if they exist
+            if (this.otherPlayers[uid]) {
+                this.otherPlayers[uid].container.destroy();
+                delete this.otherPlayers[uid];
+            }
+            return;
+        }
+
+        // Create or update other player
+        if (!this.otherPlayers[uid]) {
+            this.createOtherPlayer(uid, playerData);
+        } else {
+            this.updateExistingPlayer(uid, playerData);
+        }
+    }
+
+    private createOtherPlayer(uid: string, playerData: Player) {
+        // Create container for player and their name/presence
+        const container = this.add.container(
+            (playerData.x * this.gridSize) + (this.gridSize / 2),
+            (playerData.y * this.gridSize) + this.gridSize
+        );
+        this.updatePlayerDepth(container);
+
+        // Create player sprite
+        const sprite = this.add.sprite(0, 0, 'player');
+        sprite.setOrigin(0.5, 1.0);
+        container.add(sprite);
+
+        // Create name container
+        const nameContainer = this.add.container(0, -57);
+
+        // Create name text
+        const nameText = this.add.text(8, 0, playerData.name || 'Anonymous', {
+            fontFamily: 'Arial',
+            fontSize: '12px',
+            color: '#ffffff'
+        });
+        nameText.setOrigin(0, 0.5);
+
+        // Create background for name and presence indicator
+        const padding = 16;
+        const dotSize = 8;
+        const nameBackground = this.add.rectangle(
+            nameText.width/2 + padding/2 - dotSize,
+            0,
+            nameText.width + padding + dotSize,
+            16,
+            0x000000,
+            0.5
+        );
+        nameBackground.setOrigin(0.5, 0.5);
+
+        // Create presence indicator
+        const status = getPresenceStatus(playerData);
+        const presenceIndicator = this.add.circle(0, 0, 4, getPresenceColor(status));
+
+        // Add everything to the name container
+        nameContainer.add([nameBackground, presenceIndicator, nameText]);
+        container.add(nameContainer);
+
+        // Store references
+        this.otherPlayers[uid] = {
+            container,
+            sprite,
+            nameText,
+            presenceIndicator
+        };
+    }
+
+    private updateExistingPlayer(uid: string, playerData: Player) {
+        const playerObj = this.otherPlayers[uid];
+        
+        // Update position with tween if moving
+        if (playerData.moving) {
+            this.add.tween({
+                targets: playerObj.container,
+                x: (playerData.x * this.gridSize) + (this.gridSize / 2),
+                y: (playerData.y * this.gridSize) + this.gridSize,
+                duration: this.MOVE_COOLDOWN * this.ANIMATION_VS_COOLDOWN,
+                ease: 'Linear',
+                onUpdate: () => {
+                    this.updatePlayerDepth(playerObj.container);
+                },
+                onComplete: () => {
+                    (playerObj.sprite as any).play(`idle-${playerData.direction}`);
+                    this.updatePlayerDepth(playerObj.container);
+                }
+            });
+            (playerObj.sprite as any).play(`walk-${playerData.direction}`);
+        } else {
+            // Update position immediately if not moving
+            playerObj.container.setPosition(
+                (playerData.x * this.gridSize) + (this.gridSize / 2),
+                (playerData.y * this.gridSize) + this.gridSize
+            );
+            this.updatePlayerDepth(playerObj.container);
+            (playerObj.sprite as any).play(`idle-${playerData.direction}`);
+        }
+
+        // Update name if changed
+        if (playerData.name !== playerObj.nameText.text) {
+            playerObj.nameText.setText(playerData.name || 'Anonymous');
+        }
+
+        // Update presence indicator color
+        const newStatus = getPresenceStatus(playerData);
+        playerObj.presenceIndicator.setFillStyle(getPresenceColor(newStatus));
     }
 }
