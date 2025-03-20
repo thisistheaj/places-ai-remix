@@ -3,7 +3,7 @@ import { Scene } from 'phaser';
 import { subscribeToPlayers, updatePlayerPosition, updateLastSeen } from '~/lib/firebase';
 import { Player, getPresenceStatus, getPresenceColor } from '~/models/player';
 
-const DEBUG_ENABLED = false; // Toggle all debug visualizations
+const DEBUG_ENABLED = true; // Toggle all debug visualizations
 
 interface TiledLayerData extends Phaser.Tilemaps.LayerData {
     type?: string;
@@ -232,6 +232,7 @@ export class Game extends Scene
             this.debugGraphics.setDepth(this.PLAYER_DEPTH - 0.1);
         }
 
+        // todo: move to its own function
         // Enable collision for specified layers
         Object.entries(this.layers).forEach(([layerPath, layer]) => {
             if (!layer || !(layer instanceof Phaser.Tilemaps.TilemapLayer)) {
@@ -312,6 +313,7 @@ export class Game extends Scene
             this.updatePlayerDepth(this.player);
         });
 
+        // todo: move to its own function
         // Subscribe to player updates
         const unsubscribe = subscribeToPlayers((players) => {
             Object.entries(players).forEach(([uid, playerData]) => {
@@ -652,7 +654,6 @@ export class Game extends Scene
             `Tilesets loaded: ${this.map.tilesets.length}`,
             `Layers created: ${Object.keys(this.layers).length}`,
             `Player grid position: (${this.gridPos.x}, ${this.gridPos.y})`,
-            `Player pixel position: (${this.player.list[0].x}, ${this.player.list[0].y})`,
             `Player facing: ${this.facing}`,
             'Layers (name: depth, collision):'
         ];
@@ -661,7 +662,6 @@ export class Game extends Scene
             const hasCollision = this.collisionLayers.includes(name);
             debugInfo.push(`- ${name}: depth=${layer.depth}, collision=${hasCollision}`);
         });
-        debugInfo.push(`Player depth: ${this.player.list[0].depth}`);
 
         // Create a semi-transparent black rectangle for the background
         const padding = { x: 5, y: 5 };
@@ -715,11 +715,6 @@ export class Game extends Scene
 
         // Emit event with closest player or null if none are nearby
         EventBus.emit('nearby-player', closestPlayer);
-    }
-
-    changeScene ()
-    {
-        this.scene.start('GameOver');
     }
 
     // Update the depth of a player container based on its Y position

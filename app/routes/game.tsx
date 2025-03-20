@@ -62,7 +62,7 @@ export default function Game() {
         <div className="container mx-auto px-4 py-2 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Link to="/" className="font-pixel text-purple-600 text-lg hover:text-purple-800 transition-colors">
-              Chiptunes Stack
+              Hackerhouse AI
             </Link>
           </div>
           

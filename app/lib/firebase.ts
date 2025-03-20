@@ -17,10 +17,9 @@ import {
   set,
   push,
   serverTimestamp,
-  remove,
   update
 } from 'firebase/database';
-import { Player, getPresenceStatus, PRESENCE_TIMES } from '~/models/player';
+import { Player, getPresenceStatus } from '~/models/player';
 
 // Declare global window with ENV property
 declare global {
@@ -77,16 +76,6 @@ export const signOut = async () => {
 export const onAuthChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
-
-// Player tracking functions
-interface Player {
-  lastSeenAt?: number;
-  direction?: string;
-  moving?: boolean;
-  x?: number;
-  y?: number;
-  [key: string]: any;
-}
 
 /**
  * Set up presence tracking for the current user
@@ -205,15 +194,5 @@ export const updatePlayerPosition = (
   return update(playerRef, { x, y, direction, moving });
 };
 
-// Export the Firebase instances for direct access if needed
-export { 
-  auth, 
-  database, 
-  ref, 
-  onValue,
-  push,
-  serverTimestamp,
-  set,
-  update,
-  remove 
-}; 
+// DO NOT import these elsewhere
+export { database, push, onValue, ref, set, update, serverTimestamp };

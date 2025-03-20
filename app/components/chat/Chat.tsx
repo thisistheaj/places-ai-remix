@@ -5,8 +5,7 @@ import type { Message } from '~/models/message';
 import { EventBus } from '~/game/EventBus';
 import { useDebounce } from '~/hooks/useDebounce';
 import { getPresenceStatus, getPresenceColor, type Player } from '~/models/player';
-import { ref, onValue } from 'firebase/database';
-import { database } from '~/lib/firebase';
+import { subscribeToPlayers } from '~/lib/firebase';
 
 interface NearbyPlayer {
   id: string;
@@ -105,13 +104,7 @@ export function Chat() {
   // Subscribe to all players to get presence information
   useEffect(() => {
     if (!user) return;
-    
-    const playersRef = ref(database, 'players');
-    return onValue(playersRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setPlayers(snapshot.val());
-      }
-    });
+    return subscribeToPlayers(setPlayers);
   }, [user]);
 
   // Helper function to get presence color for a user

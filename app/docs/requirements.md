@@ -270,10 +270,9 @@
 - [ ] Environment variables are managed securely
 - [ ] Deployment process is documented 
 
-
 ## Future works
 -[x] test presence
--[ ] profile and charachter selection
+-[ ] profile and character selection
 -[ ] room detection
 -[ ] implement API
 -[ ] Implement AI
