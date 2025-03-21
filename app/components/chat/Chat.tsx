@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '~/lib/auth';
 import { subscribeToMessages, sendGlobalMessage, sendDirectMessage, sendRoomMessage, PATHS, getUserColor, subscribeToDmUsers, subscribeToUserSearch } from '~/lib/chat';
 import type { Message } from '~/models/message';
@@ -27,6 +27,8 @@ export function Chat() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [isChatCollapsed, setIsChatCollapsed] = useState(() => {
     const saved = localStorage.getItem('chat-collapsed');
     return saved ? JSON.parse(saved) : true;
@@ -45,12 +47,14 @@ export function Chat() {
   const debouncedSearch = useDebounce(searchTerm, 300);
   const [players, setPlayers] = useState<Record<string, Player>>({});
   
-  // The current chat context: room > manual DM > nearby player > global
-  const currentChatPartner = manualDmUser || nearbyPlayer;
-  const chatContext = currentRoom ? { type: 'room' as const, room: currentRoom } 
-    : currentChatPartner ? { type: 'dm' as const, partner: currentChatPartner }
-    : { type: 'global' as const };
-  
+  // Memoize the chat context to prevent unnecessary recalculations
+  const chatContext = useMemo(() => {
+    const currentChatPartner = manualDmUser || nearbyPlayer;
+    return currentRoom ? { type: 'room' as const, room: currentRoom } 
+      : currentChatPartner ? { type: 'dm' as const, partner: currentChatPartner }
+      : { type: 'global' as const };
+  }, [currentRoom, manualDmUser, nearbyPlayer]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -84,6 +88,17 @@ export function Chat() {
     };
   }, [user]);
 
+  // Handle scroll events to determine if we should auto-scroll
+  const handleScroll = useCallback(() => {
+    if (!messageListRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = messageListRef.current;
+    const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 50;
+    if (isAtBottom !== shouldAutoScroll) {
+      setShouldAutoScroll(isAtBottom);
+    }
+  }, [shouldAutoScroll]);
+
   // Subscribe to messages based on current context
   useEffect(() => {
     if (!user) return;
@@ -97,7 +112,21 @@ export function Chat() {
       path = PATHS.global;
     }
     
-    const unsubscribe = subscribeToMessages(path, setMessages);
+    // Only reset auto-scroll when explicitly changing contexts
+    if (path !== PATHS.global) {
+      setShouldAutoScroll(true);
+    }
+    
+    const unsubscribe = subscribeToMessages(path, (newMessages) => {
+      setMessages(newMessages);
+      // Check if we should auto-scroll after receiving new messages
+      if (messageListRef.current) {
+        const { scrollTop, scrollHeight, clientHeight } = messageListRef.current;
+        const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 50;
+        setShouldAutoScroll(isAtBottom);
+      }
+    });
+    
     return () => unsubscribe();
   }, [user, chatContext]);
   
@@ -107,9 +136,6 @@ export function Chat() {
       // Only handle proximity updates if we're not in a manual DM
       if (!manualDmUser && player?.id !== nearbyPlayer?.id) {
         setNearbyPlayer(player);
-        if (player) {
-          setMessages([]);
-        }
       }
     };
     
@@ -117,14 +143,13 @@ export function Chat() {
     return () => {
       EventBus.off('nearby-player', handleNearbyPlayer);
     };
-  }, [nearbyPlayer, manualDmUser]);
+  }, [manualDmUser, nearbyPlayer]);
   
-  // Scroll to bottom when messages change or chat is expanded
+  // Scroll to bottom only when new messages arrive and we're at the bottom
   useEffect(() => {
-    if (!isChatCollapsed) {
-      scrollToBottom();
-    }
-  }, [messages, isChatCollapsed]);
+    if (isChatCollapsed || !shouldAutoScroll) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+  }, [messages.length, isChatCollapsed, shouldAutoScroll]);
   
   // Save collapsed states to localStorage
   useEffect(() => {
@@ -168,19 +193,17 @@ export function Chat() {
     setTimeout(() => setIsSearching(false), 200);
   };
 
-  const switchToDm = (dmUser: DmUser) => {
+  const switchToDm = useCallback((dmUser: DmUser) => {
     setManualDmUser(dmUser);
     setNearbyPlayer(null);
-    setMessages([]);
     setSearchTerm('');
     setIsSearching(false);
-  };
+  }, []);
 
-  const returnToPublicChat = () => {
+  const returnToPublicChat = useCallback(() => {
     setManualDmUser(null);
     setNearbyPlayer(null);
-    setMessages([]);
-  };
+  }, []);
   
   return (
     <div className="fixed bottom-4 right-4 flex flex-col gap-2">
@@ -296,7 +319,11 @@ export function Chat() {
         <div className={`transition-all duration-200 ${isChatCollapsed ? 'h-0' : 'h-80'}`}>
           <div className="h-full flex flex-col">
             {/* Message list */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div 
+              ref={messageListRef}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-[rgba(217,70,239,0.5)] scrollbar-track-transparent hover:scrollbar-thumb-[rgba(217,70,239,0.7)]"
+            >
               {messages.length === 0 && (
                 <div className="text-[rgba(217,70,239,0.5)] italic text-center">
                   {chatContext.type === 'dm' && chatContext.partner
