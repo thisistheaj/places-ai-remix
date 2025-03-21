@@ -31,11 +31,18 @@ export function Chat() {
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [isChatCollapsed, setIsChatCollapsed] = useState(() => {
     const saved = localStorage.getItem('chat-collapsed');
-    return saved ? JSON.parse(saved) : true;
+    // For new users, start collapsed
+    return saved !== null ? JSON.parse(saved) : true;
   });
   const [isUsersCollapsed, setIsUsersCollapsed] = useState(() => {
     const saved = localStorage.getItem('users-collapsed');
-    return saved ? JSON.parse(saved) : true;
+    // For new users, start collapsed
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [isInstructionsCollapsed, setIsInstructionsCollapsed] = useState(() => {
+    const saved = localStorage.getItem('instructions-collapsed');
+    // For new users, start expanded
+    return saved !== null ? JSON.parse(saved) : false;
   });
   const [nearbyPlayer, setNearbyPlayer] = useState<NearbyPlayer | null>(null);
   const [manualDmUser, setManualDmUser] = useState<DmUser | null>(null);
@@ -155,7 +162,8 @@ export function Chat() {
   useEffect(() => {
     localStorage.setItem('chat-collapsed', JSON.stringify(isChatCollapsed));
     localStorage.setItem('users-collapsed', JSON.stringify(isUsersCollapsed));
-  }, [isChatCollapsed, isUsersCollapsed]);
+    localStorage.setItem('instructions-collapsed', JSON.stringify(isInstructionsCollapsed));
+  }, [isChatCollapsed, isUsersCollapsed, isInstructionsCollapsed]);
   
   // Subscribe to all players to get presence information
   useEffect(() => {
@@ -207,6 +215,33 @@ export function Chat() {
   
   return (
     <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+      {/* Instructions Section */}
+      <div className="w-80 bg-[rgba(30,30,50,0.9)] backdrop-blur-sm border border-[rgba(217,70,239,0.3)] rounded-lg shadow-lg overflow-hidden">
+        <button
+          onClick={() => setIsInstructionsCollapsed(!isInstructionsCollapsed)}
+          className="w-full p-2 flex items-center justify-between bg-[rgba(30,30,50,0.8)] hover:bg-[rgba(217,70,239,0.2)] transition-colors"
+        >
+          <span className="font-medium text-[#d946ef]">Welcome to HackerHouse AI!</span>
+          <span className="text-sm text-[#d946ef] opacity-50">
+            {isInstructionsCollapsed ? '▼' : '▲'}
+          </span>
+        </button>
+
+        <div className={`transition-all duration-200 overflow-hidden ${isInstructionsCollapsed ? 'h-0' : ''}`}>
+          <div className="p-4 text-white space-y-2">
+            <p className="text-[rgba(217,70,239,0.9)]">Here are some things you should know:</p>
+            <ul className="list-disc list-inside space-y-1 text-[rgba(255,255,255,0.9)]">
+              <li>Use <span className="text-[#d946ef] font-medium">WASD</span> to move</li>
+              <li>Walk up to people or meeting rooms to talk to them</li>
+              <li>Select a character skin in the settings menu up top</li>
+              <li>And don't forget to enable notifications so you know when other hackers are hitting you up</li>
+              <li>Pick a desk to sit at and wait for friends — first come, first serve</li>
+            </ul>
+            <p className="text-[#d946ef] font-medium mt-4">Happy chatting!</p>
+          </div>
+        </div>
+      </div>
+
       {/* Users and Search Box - only show when not in a room or DM */}
       {!currentRoom && !manualDmUser && !nearbyPlayer && (
         <div className="w-80 bg-[rgba(30,30,50,0.9)] backdrop-blur-sm border border-[rgba(217,70,239,0.3)] rounded-lg shadow-lg overflow-hidden">
