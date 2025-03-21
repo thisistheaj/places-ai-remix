@@ -439,6 +439,7 @@ export function Chat() {
                 <input
                   ref={inputRef}
                   type="text"
+                  name="message"
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder={chatContext.type === 'dm' && chatContext.partner ? `Message ${chatContext.partner.name}...` : "Type a message..."}
