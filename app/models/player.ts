@@ -1,7 +1,7 @@
 // Presence time constants (in milliseconds)
 export const PRESENCE_TIMES = {
   FIVE_MINUTES: 5 * 60 * 1000,    // 5 minutes
-  TWENTY_MINUTES: 20 * 60 * 1000, // 20 minutes
+  SIX_HOURS: 6 * 60 * 60 * 1000, // 6 hours
 } as const;
 
 export interface Player {
