@@ -14,16 +14,15 @@ awk '
     # Remove leading/trailing whitespace and quotes
     gsub(/^[ "]+|[ ",]+$/, "", value)
     
-    # Find Downloads in the path (handling both / and \)
-    if (match(value, /[\/\\]+Downloads[\/\\]/) > 0) {
-      # Get the Downloads part and everything after it
-      value = substr(value, RSTART + 1)
-      # Replace any double slashes and backslashes with single forward slash
-      gsub(/[\/\\]+/, "/", value)
-    }
+    # Extract just the filename from the path
+    split(value, path_parts, /[\/\\]+/)
+    filename = path_parts[length(path_parts)]
+    
+    # Set the new path to point to tilesets directory
+    new_path = "../tilesets/" filename
     
     # Reconstruct the line preserving original whitespace
-    print parts[1] ": \"" value "\","
+    print parts[1] ": \"" new_path "\","
     next
   }
   

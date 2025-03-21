@@ -17,7 +17,8 @@ import {
   set,
   push,
   serverTimestamp,
-  update
+  update,
+  get
 } from 'firebase/database';
 import { Player, getPresenceStatus } from '~/models/player';
 
@@ -32,6 +33,7 @@ declare global {
       FIREBASE_STORAGE_BUCKET: string;
       FIREBASE_MESSAGING_SENDER_ID: string;
       FIREBASE_APP_ID: string;
+      FIREBASE_VAPID_KEY: string;
     };
   }
 }
@@ -205,4 +207,4 @@ export const updatePlayerSkin = (uid: string, skin: string) => {
 };
 
 // DO NOT import these elsewhere
-export { database, push, onValue, ref, set, update, serverTimestamp };
+export { database, push, onValue, ref, set, update, serverTimestamp, get };
