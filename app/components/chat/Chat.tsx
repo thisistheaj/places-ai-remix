@@ -6,6 +6,7 @@ import { EventBus } from '~/game/EventBus';
 import { useDebounce } from '~/hooks/useDebounce';
 import { getPresenceStatus, getPresenceColor, type Player } from '~/models/player';
 import { subscribeToPlayers } from '~/lib/firebase';
+import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 
 interface NearbyPlayer {
   id: string;
@@ -53,6 +54,10 @@ export function Chat() {
   const [searchResults, setSearchResults] = useState<DmUser[]>([]);
   const debouncedSearch = useDebounce(searchTerm, 300);
   const [players, setPlayers] = useState<Record<string, Player>>({});
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
   
   // Memoize the chat context to prevent unnecessary recalculations
   const chatContext = useMemo(() => {
@@ -213,6 +218,43 @@ export function Chat() {
     setNearbyPlayer(null);
   }, []);
   
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showEmojiPicker && 
+          emojiButtonRef.current && 
+          !emojiButtonRef.current.contains(event.target as Node) &&
+          !(event.target as Element)?.closest('.EmojiPickerReact')) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showEmojiPicker]);
+
+  const onEmojiClick = useCallback((emojiData: EmojiClickData) => {
+    const cursor = inputRef.current?.selectionStart || inputValue.length;
+    const newValue = inputValue.slice(0, cursor) + emojiData.emoji + inputValue.slice(cursor);
+    setInputValue(newValue);
+    setShowEmojiPicker(false);
+    // Focus back on input and place cursor after emoji
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(cursor + emojiData.emoji.length, cursor + emojiData.emoji.length);
+      }
+    });
+  }, [inputValue]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputValue.trim()) return;
+    
+    handleSendMessage(inputValue);
+    setInputValue('');
+  };
+
   return (
     <div className="fixed bottom-4 right-4 flex flex-col gap-2">
       {/* Instructions Section */}
@@ -381,25 +423,41 @@ export function Chat() {
             </div>
             
             {/* Input */}
-            <div className="p-2 border-t border-[rgba(217,70,239,0.3)]">
+            <div className="p-2 border-t border-[rgba(217,70,239,0.3)] relative">
               <form
-                onSubmit={e => {
-                  e.preventDefault();
-                  const form = e.currentTarget;
-                  const input = form.elements.namedItem('message') as HTMLInputElement;
-                  if (!input.value.trim()) return;
-                  
-                  handleSendMessage(input.value);
-                  input.value = '';
-                }}
+                onSubmit={handleSubmit}
+                className="flex items-center gap-2"
               >
+                <button
+                  type="button"
+                  ref={emojiButtonRef}
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className="p-2 text-[rgba(217,70,239,0.7)] hover:text-[#d946ef] transition-colors"
+                >
+                  😊
+                </button>
                 <input
+                  ref={inputRef}
                   type="text"
-                  name="message"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
                   placeholder={chatContext.type === 'dm' && chatContext.partner ? `Message ${chatContext.partner.name}...` : "Type a message..."}
-                  className="w-full p-2 rounded bg-[rgba(30,30,50,0.8)] border border-[rgba(217,70,239,0.3)] text-white placeholder-[rgba(217,70,239,0.5)] focus:border-[rgba(217,70,239,0.5)] focus:outline-none"
+                  className="flex-1 p-2 rounded bg-[rgba(30,30,50,0.8)] border border-[rgba(217,70,239,0.3)] text-white placeholder-[rgba(217,70,239,0.5)] focus:border-[rgba(217,70,239,0.5)] focus:outline-none"
                 />
               </form>
+              
+              {/* Emoji Picker */}
+              {showEmojiPicker && (
+                <div className="absolute bottom-full right-0 mb-2">
+                  <EmojiPicker
+                    theme={Theme.DARK}
+                    onEmojiClick={onEmojiClick}
+                    autoFocusSearch={false}
+                    width={320}
+                    height={400}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
