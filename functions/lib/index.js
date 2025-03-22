@@ -1,10 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onChatMessageCreated = exports.onGlobalMessageCreated = void 0;
+exports.onMessageToBot = exports.onChatMessageCreated = exports.onGlobalMessageCreated = void 0;
 const database_1 = require("firebase-functions/v2/database");
 const messaging_1 = require("firebase-admin/messaging");
 const database_2 = require("firebase-admin/database");
 const app_1 = require("firebase-admin/app");
+const node_fetch_1 = __importDefault(require("node-fetch"));
 (0, app_1.initializeApp)();
 // Helper to get user's notification preferences
 async function getUserPreferences(userId) {
@@ -284,6 +288,85 @@ exports.onChatMessageCreated = (0, database_1.onValueCreated)('/messages/{contex
             });
         }
         return null;
+    }
+});
+// Function to handle messages sent to bots
+exports.onMessageToBot = (0, database_1.onValueCreated)('/messages/dm/{chatId}/{messageId}', async (event) => {
+    const message = event.data.val();
+    const { chatId, messageId } = event.params;
+    // Don't process system messages
+    if (message.type === 'system')
+        return null;
+    // We need targetId to determine the recipient
+    if (!message.targetId) {
+        console.log('Message has no targetId, skipping bot check');
+        return null;
+    }
+    console.log('Checking if message is to a bot:', {
+        chatId,
+        messageId,
+        senderId: message.uid,
+        targetId: message.targetId,
+        text: message.text
+    });
+    try {
+        // Check if the target is a bot
+        const targetUserSnapshot = await (0, database_2.getDatabase)()
+            .ref(`players/${message.targetId}`)
+            .once('value');
+        const targetUser = targetUserSnapshot.val();
+        if (!targetUser) {
+            console.log(`Target user ${message.targetId} not found`);
+            return null;
+        }
+        // If not a bot, exit
+        if (!targetUser.isBot) {
+            console.log(`Target user ${message.targetId} is not a bot`);
+            return null;
+        }
+        console.log(`Target user ${message.targetId} is a bot, forwarding message to /receive endpoint`);
+        // Forward the message to the bot's receive endpoint
+        const apiUrl = process.env.API_URL || 'https://aihacker.house';
+        const receiveUrl = `${apiUrl}/api/receive/${message.targetId}`;
+        const response = await (0, node_fetch_1.default)(receiveUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': process.env.ADMIN_TOKEN || 'master-of-bots'
+            },
+            body: JSON.stringify({
+                message: message.text,
+                sourceUserId: message.uid
+            })
+        });
+        if (!response.ok) {
+            const errorData = await response.text();
+            console.error(`Error from receive endpoint: ${response.status} - ${errorData}`);
+            return {
+                success: false,
+                error: `Failed to process message: ${response.status}`
+            };
+        }
+        const result = await response.json();
+        console.log('Bot response processed successfully:', result);
+        return {
+            success: true,
+            botResponse: result
+        };
+    }
+    catch (error) {
+        console.error('Error processing message to bot:', error);
+        if (error instanceof Error) {
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+            });
+        }
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
     }
 });
 //# sourceMappingURL=index.js.map

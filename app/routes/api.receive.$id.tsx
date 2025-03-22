@@ -2,6 +2,7 @@ import { json } from '@remix-run/node';
 import type { ActionFunction, LoaderFunction } from '@remix-run/node';
 import { getUserProfile } from '~/lib/user';
 import OpenAI from 'openai';
+import fetch from 'node-fetch';
 
 export const loader: LoaderFunction = async ({ request, params }) => {
   // Check for admin token in Authorization header
@@ -101,9 +102,9 @@ export const action: ActionFunction = async ({ request, params }) => {
   }
 
   try {
-    // Parse request body for message text
+    // Parse request body for message text and source user ID
     const body = await request.json();
-    const { message } = body;
+    const { message, sourceUserId } = body;
     
     if (!message || typeof message !== 'string') {
       return json({ 
@@ -139,15 +140,6 @@ export const action: ActionFunction = async ({ request, params }) => {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    // Prepare the message for OpenAI
-    const prompt = `
-You are a bot named "${bot.name}" in a virtual world. Please respond to the following message from a user:
-
-${message}
-
-Keep your response concise and in character. You are a helpful assistant in this virtual world.
-`;
-
     // Make the API call to GPT-4o
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -168,12 +160,35 @@ Keep your response concise and in character. You are a helpful assistant in this
     // Extract the response text
     const responseText = response.choices[0]?.message?.content || "I couldn't process that message.";
 
+    // Now send the bot's response using the /send endpoint
+    const sendUrl = 'https://aihacker.house/api/send/' + bot.uid;
+    const sendPayload = {
+      text: responseText,
+      // If sourceUserId is provided, send back to the user as a DM
+      ...(sourceUserId ? { targetUserId: sourceUserId } : {})
+    };
+
+    // Send the message
+    const sendResponse = await fetch(sendUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token
+      },
+      body: JSON.stringify(sendPayload)
+    });
+
+    const sendResult = await sendResponse.json();
+
+    // Return both the AI-generated response and the send endpoint result
     return json({ 
       success: true,
       botId: bot.uid,
       botName: bot.name,
-      message: message,
-      response: responseText
+      userMessage: message,
+      botResponse: responseText,
+      messageSent: sendResult.success,
+      messageDetails: sendResult.message
     });
   } catch (error: any) {
     console.error('Error processing message with OpenAI:', error);
