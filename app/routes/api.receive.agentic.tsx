@@ -7,6 +7,7 @@ import fetch from 'node-fetch';
 // Constants
 const MAX_ACTIONS = 10; // Maximum number of actions before auto-terminating
 const PROXIMITY_THRESHOLD = 3; // How close we need to be to consider "near" a target
+const GITHUB_API_BASE = 'https://api.github.com';
 
 // Types
 interface Position {
@@ -30,11 +31,43 @@ interface SeeResponse {
 }
 
 interface Task {
-  type: 'move_to_player' | 'move_to_coords' | 'send_message' | 'end';
+  type: 'move_to_player' | 'move_to_coords' | 'send_message' | 'end' | 'github_pr' | 'github_repo' | 'github_issues';
   targetId?: string;
   targetCoords?: { x: number; y: number };
   message?: string;
   originalMessage: string;
+  owner?: string;
+  repo?: string;
+  state?: string;
+}
+
+interface GitHubPR {
+  number: number;
+  title: string;
+  html_url: string;
+  created_at: string;
+  user: {
+    login: string;
+  };
+}
+
+interface GitHubRepo {
+  name: string;
+  description: string;
+  html_url: string;
+  stargazers_count: number;
+  forks_count: number;
+}
+
+interface GitHubIssue {
+  number: number;
+  title: string;
+  html_url: string;
+  state: string;
+  created_at: string;
+  user: {
+    login: string;
+  };
 }
 
 // Helper functions
@@ -76,43 +109,121 @@ async function sendMessage(botId: string, token: string, text: string, targetUse
   return await response.json();
 }
 
+// GitHub API helper functions
+async function getLatestPR(owner: string, repo: string): Promise<GitHubPR | null> {
+  console.log('[github] Fetching latest PR for', owner, repo);
+  try {
+    const response = await fetch(
+      `${GITHUB_API_BASE}/repos/${owner}/${repo}/pulls?state=all&sort=created&direction=desc&per_page=1`,
+      {
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'places-ai-bot'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      console.log('[github] Failed to fetch PR:', response.status);
+      return null;
+    }
+
+    const prs = await response.json();
+    return prs[0] || null;
+  } catch (error) {
+    console.error('[github] Error fetching PR:', error);
+    return null;
+  }
+}
+
+async function getRepoInfo(owner: string, repo: string): Promise<GitHubRepo | null> {
+  console.log('[github] Fetching repo info for', owner, repo);
+  try {
+    const response = await fetch(
+      `${GITHUB_API_BASE}/repos/${owner}/${repo}`,
+      {
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'places-ai-bot'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      console.log('[github] Failed to fetch repo:', response.status);
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('[github] Error fetching repo:', error);
+    return null;
+  }
+}
+
+async function getLatestIssues(owner: string, repo: string, state: string = 'open'): Promise<GitHubIssue[]> {
+  console.log('[github] Fetching issues for', owner, repo);
+  try {
+    const response = await fetch(
+      `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues?state=${state}&sort=created&direction=desc&per_page=5`,
+      {
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'places-ai-bot'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      console.log('[github] Failed to fetch issues:', response.status);
+      return [];
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('[github] Error fetching issues:', error);
+    return [];
+  }
+}
+
 async function determineNextAction(
   message: string,
   currentState: SeeResponse,
   openai: OpenAI,
-  lastActionResult?: any
+  lastActionResult?: any,
+  githubData?: any // Store GitHub data between actions
 ): Promise<Task> {
   console.log('[determineNextAction] Starting with message:', message);
   console.log('[determineNextAction] Current state:', {
     position: currentState.position,
     playerCount: currentState.players.length,
-    lastActionResult
+    lastActionResult,
+    githubData
   });
 
-  // If last action was blocked, send message and end sequence
-  if (lastActionResult?.error === 'Position is blocked') {
-    return {
-      type: 'end',
-      originalMessage: message
-    };
-  }
+  // Handle direct movement commands
+  const moveMatch = message.match(/move (up|down|left|right) (\d+)/i);
+  if (moveMatch) {
+    const [_, direction, squares] = moveMatch;
+    const targetCoords = { ...currentState.position };
+    const amount = parseInt(squares);
 
-  // If last action was sending the wall message, end sequence
-  if (lastActionResult?.message?.text === "I can't move further in that direction - there's a wall in the way.") {
-    return {
-      type: 'end',
-      originalMessage: message
-    };
-  }
+    switch (direction.toLowerCase()) {
+      case 'up':
+        targetCoords.y -= amount;
+        break;
+      case 'down':
+        targetCoords.y += amount;
+        break;
+      case 'left':
+        targetCoords.x -= amount;
+        break;
+      case 'right':
+        targetCoords.x += amount;
+        break;
+    }
 
-  // Check for direct movement commands first
-  const moveUpMatch = message.match(/move up (\d+)/i);
-  if (moveUpMatch) {
-    const squares = parseInt(moveUpMatch[1]);
-    const targetY = currentState.position.y - squares;
-    
-    // If we've reached or passed the target Y position, send completion message and end
-    if (currentState.position.y <= targetY) {
+    if (isNearTarget(currentState.position, targetCoords)) {
       return {
         type: 'send_message',
         message: 'I have completed the movement.',
@@ -120,127 +231,63 @@ async function determineNextAction(
       };
     }
 
-    // If we hit a wall in the previous attempt, send wall message
-    if (lastActionResult?.error === 'Position is blocked') {
-      return {
-        type: 'send_message',
-        message: "I can't move further in that direction - there's a wall in the way.",
-        originalMessage: message
-      };
-    }
-    
     return {
       type: 'move_to_coords',
-      targetCoords: {
-        x: currentState.position.x,
-        y: targetY
-      },
+      targetCoords,
       originalMessage: message
     };
   }
 
-  const moveDownMatch = message.match(/move down (\d+)/i);
-  if (moveDownMatch) {
-    const squares = parseInt(moveDownMatch[1]);
-    const targetY = currentState.position.y + squares;
-    
-    // If we've reached or passed the target Y position, send completion message and end
-    if (currentState.position.y >= targetY) {
-      return {
-        type: 'send_message',
-        message: 'I have completed the movement.',
-        originalMessage: message
-      };
-    }
-    
-    return {
-      type: 'move_to_coords',
-      targetCoords: {
-        x: currentState.position.x,
-        y: targetY
-      },
-      originalMessage: message
-    };
-  }
-
-  const moveLeftMatch = message.match(/move left (\d+)/i);
-  if (moveLeftMatch) {
-    const squares = parseInt(moveLeftMatch[1]);
-    const targetX = currentState.position.x - squares;
-    
-    // If we've reached or passed the target X position, send completion message and end
-    if (currentState.position.x <= targetX) {
-      return {
-        type: 'send_message',
-        message: 'I have completed the movement.',
-        originalMessage: message
-      };
-    }
-    
-    return {
-      type: 'move_to_coords',
-      targetCoords: {
-        x: targetX,
-        y: currentState.position.y
-      },
-      originalMessage: message
-    };
-  }
-
-  const moveRightMatch = message.match(/move right (\d+)/i);
-  if (moveRightMatch) {
-    const squares = parseInt(moveRightMatch[1]);
-    const targetX = currentState.position.x + squares;
-    
-    // If we've reached or passed the target X position, send completion message and end
-    if (currentState.position.x >= targetX) {
-      return {
-        type: 'send_message',
-        message: 'I have completed the movement.',
-        originalMessage: message
-      };
-    }
-    
-    return {
-      type: 'move_to_coords',
-      targetCoords: {
-        x: targetX,
-        y: currentState.position.y
-      },
-      originalMessage: message
-    };
-  }
-
-  // If no direct movement command matched, use GPT-4 for more complex commands
+  // For all other cases, use GPT-4 to determine the action
   const response = await openai.chat.completions.create({
     model: "gpt-4",
     messages: [
       {
         role: "system",
         content: `You are an AI that determines the next action for a bot in a virtual space.
-Based on the message and current state, you must decide what to do next.
-You can:
+You must analyze the user's message and current state to decide the next action.
+
+Available actions:
 1. Move to a player (type: move_to_player, needs targetId)
 2. Move to coordinates (type: move_to_coords, needs targetCoords)
 3. Send a message (type: send_message, needs message and optionally targetId)
 4. End the sequence (type: end)
 
-For multi-step commands:
-- First move to the target location or player
-- Once near the target, send any messages
-- Then end the sequence
+For GitHub interactions, you can request:
+1. Latest PR info (type: github_pr, needs owner and repo)
+2. Repository info (type: github_repo, needs owner and repo)
+3. Latest issues (type: github_issues, needs owner and repo, optional state)
+
+Key behaviors:
+1. For GitHub-related requests:
+   - First request the appropriate GitHub data
+   - Once data is received, either:
+     a. Send a message with the information
+     b. Move to a player to deliver the information
+
+2. For direct questions or conversations:
+   - Respond with a message to the asking player
+   - Then end the sequence
+
+3. For message delivery requests:
+   - First move to the target player
+   - Once near them, deliver the message
+   - Then end the sequence
 
 You must respond with ONLY a JSON object containing the action details, nothing else.
 Example responses:
+{"type": "github_pr", "owner": "thisistheaj", "repo": "places-ai-remix"}
+{"type": "github_issues", "owner": "thisistheaj", "repo": "places-ai-remix", "state": "open"}
 {"type": "move_to_player", "targetId": "user123"}
-{"type": "send_message", "message": "Hello!", "targetId": "user123"}
-{"type": "end"}`
+{"type": "send_message", "message": "Here's what I found...", "targetId": "user123"}`
       },
       {
         role: "user",
         content: `Message: "${message}"
 Current position: ${JSON.stringify(currentState.position)}
 Nearby players: ${JSON.stringify(currentState.players)}
+Last action result: ${JSON.stringify(lastActionResult)}
+GitHub data: ${JSON.stringify(githubData)}
 What should I do next?`
       }
     ],
@@ -253,29 +300,35 @@ What should I do next?`
     
     const action = JSON.parse(content.trim());
     console.log('[determineNextAction] Parsed action:', action);
-    
-    // If we're near the target player and haven't sent a message yet, send greeting
-    if (action.type === 'move_to_player' && lastActionResult?.message === 'Already near target player') {
-      const targetPlayer = currentState.players.find(p => p.id === action.targetId);
-      if (targetPlayer) {
-        // Check if we've already sent a message to this player
-        if (lastActionResult?.message?.text?.includes(`Hello ${targetPlayer.name}!`)) {
-          return {
-            type: 'end',
-            originalMessage: message
-          };
-        }
-        return {
-          type: 'send_message',
-          message: `Hello ${targetPlayer.name}!`,
-          targetId: targetPlayer.id,
-          originalMessage: message
-        };
-      }
+
+    // Handle GitHub tool calls
+    if (action.type === 'github_pr') {
+      const pr = await getLatestPR(action.owner, action.repo);
+      return determineNextAction(message, currentState, openai, lastActionResult, { type: 'pr', data: pr });
     }
     
-    // After sending a message, end the sequence
-    if (action.type === 'send_message' || lastActionResult?.message?.text?.startsWith('Hello ')) {
+    if (action.type === 'github_repo') {
+      const repo = await getRepoInfo(action.owner, action.repo);
+      return determineNextAction(message, currentState, openai, lastActionResult, { type: 'repo', data: repo });
+    }
+    
+    if (action.type === 'github_issues') {
+      const issues = await getLatestIssues(action.owner, action.repo, action.state);
+      return determineNextAction(message, currentState, openai, lastActionResult, { type: 'issues', data: issues });
+    }
+    
+    // Handle movement and message actions
+    if (action.type === 'move_to_player' && lastActionResult?.message === 'Already near target player') {
+      return {
+        type: 'send_message',
+        message: action.message || 'I have reached the target player.',
+        targetId: action.targetId,
+        originalMessage: message
+      };
+    }
+    
+    // After successfully sending a message, end the sequence
+    if (action.type === 'send_message' && lastActionResult?.success && lastActionResult?.message?.text === action.message) {
       return {
         type: 'end',
         originalMessage: message
