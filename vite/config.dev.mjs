@@ -45,6 +45,9 @@ export default defineConfig({
         tilemapWatcher()
     ],
     server: {
-        port: 8080
+        port: 8080,
+        hmr: {
+            port: 8002
+        }
     }
 });
