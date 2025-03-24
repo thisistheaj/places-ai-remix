@@ -647,18 +647,17 @@ alt_response = requests.post(
     "direction": string   // Bot's current facing direction
   },
   "map": number[][],      // 60x40 collision map (0 = walkable, 1 = collideable)
-  "collideableTiles": [   // List of nearby collideable tile positions
-    { 
-      "x": number, 
-      "y": number 
-    }
-  ],
-  "players": [            // List of nearby players
+  "players": [            // List of all other players in the game
     {
-      "id": string,
-      "x": number,
-      "y": number,
-      "direction": "up" | "down" | "left" | "right"
+      "id": string,       // Player's unique ID
+      "name": string,     // Player's display name
+      "x": number,        // Player's x position
+      "y": number,        // Player's y position
+      "direction": string, // Player's facing direction
+      "skin": string,     // Player's skin ID
+      "isBot": boolean,   // Whether this is a bot
+      "isMoving": boolean, // Whether the player is currently moving
+      "room": string | null // Current room name if in a room
     }
   ]
 }`}</CodeBlock>

@@ -110,6 +110,7 @@ interface MapData {
     direction: 'right' | 'up' | 'left' | 'down';
   };
   map: number[][];
+  players: Player[];
 }
 
 // Create or update user profile
@@ -419,14 +420,28 @@ export const getBotView = async (botId: string): Promise<MapData> => {
     }
 
     const currentData = playerSnapshot.val() as Player;
-    
+
+    // Get all players
+    const allPlayersRef = ref(database, 'players');
+    const allPlayersSnapshot = await get(allPlayersRef);
+    const allPlayers = allPlayersSnapshot.val() || {};
+
+    // Convert players object to array and filter out the current bot
+    const players = Object.entries(allPlayers)
+      .filter(([id]) => id !== botId)
+      .map(([id, data]) => ({
+        id,
+        ...(data as Player)
+      }));
+
     return {
       position: {
         x: currentData.x,
         y: currentData.y,
         direction: currentData.direction
       },
-      map: COLLISION_MAP
+      map: COLLISION_MAP,
+      players
     };
   } catch (error) {
     console.error('Error getting bot view:', error);
