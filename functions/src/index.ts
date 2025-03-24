@@ -3,6 +3,7 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { getDatabase } from 'firebase-admin/database';
 import { initializeApp } from 'firebase-admin/app';
 import type { MulticastMessage } from 'firebase-admin/messaging';
+import fetch from 'node-fetch';
 
 initializeApp();
 
@@ -337,5 +338,99 @@ export const onChatMessageCreated = onValueCreated('/messages/{context}/{chatId}
       });
     }
     return null;
+  }
+});
+
+// Function to handle messages sent to bots
+export const onMessageToBot = onValueCreated('/messages/dm/{chatId}/{messageId}', async (event) => {
+  const message = event.data.val() as MessageData & { targetId?: string };
+  const { chatId, messageId } = event.params;
+  
+  // Don't process system messages
+  if (message.type === 'system') return null;
+  
+  // We need targetId to determine the recipient
+  if (!message.targetId) {
+    console.log('Message has no targetId, skipping bot check');
+    return null;
+  }
+
+  console.log('Checking if message is to a bot:', {
+    chatId,
+    messageId,
+    senderId: message.uid,
+    targetId: message.targetId,
+    text: message.text
+  });
+  
+  try {
+    // Check if the target is a bot
+    const targetUserSnapshot = await getDatabase()
+      .ref(`players/${message.targetId}`)
+      .once('value');
+    
+    const targetUser = targetUserSnapshot.val();
+    
+    if (!targetUser) {
+      console.log(`Target user ${message.targetId} not found`);
+      return null;
+    }
+    
+    // If not a bot or no webhook, exit
+    if (!targetUser.isBot || !targetUser.webhook) {
+      console.log(`Target user ${message.targetId} is not a bot or has no webhook`);
+      return null;
+    }
+    
+    console.log(`Target user ${message.targetId} is a bot, forwarding message to webhook: ${targetUser.webhook}`);
+    
+    if (!targetUser.token) {
+      console.error('Bot has no token, skipping message');
+      return null;
+    }
+    
+    // Forward the message to the bot's webhook
+    const response = await fetch(targetUser.webhook, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${targetUser.token}`
+      },
+      body: JSON.stringify({
+        botId: message.targetId,
+        message: message.text,
+        sourceUserId: message.uid
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error(`Error from webhook: ${response.status} - ${errorData}`);
+      return {
+        success: false,
+        error: `Failed to process message: ${response.status}`
+      };
+    }
+    
+    const result = await response.json();
+    console.log('Bot response processed successfully:', result);
+    
+    return {
+      success: true,
+      botResponse: result
+    };
+  } catch (error) {
+    console.error('Error processing message to bot:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
   }
 }); 

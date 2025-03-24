@@ -1,7 +1,7 @@
 // Presence time constants (in milliseconds)
 export const PRESENCE_TIMES = {
   FIVE_MINUTES: 5 * 60 * 1000,    // 5 minutes
-  SIX_HOURS: 6 * 60 * 60 * 1000, // 6 hours
+  SIX_HOURS: 144 * 60 * 60 * 1000, // 6 hours
 } as const;
 
 export interface Player {
@@ -16,6 +16,9 @@ export interface Player {
   lastSeenAt: number;
   lastLeftAt?: number;
   skin?: string; // Character skin number (01-20)
+  isBot?: boolean; // Simple flag to identify bot players
+  webhook?: string; // URL for bot message delivery
+  token?: string; // Authentication token for webhook
 }
 
 export interface PlayerPosition {
@@ -38,12 +41,12 @@ export type PresenceStatus = 'online' | 'away' | 'offline';
 export function getPresenceStatus(player: Player): PresenceStatus {
   const now = Date.now();
   const fiveMinutesAgo = now - PRESENCE_TIMES.FIVE_MINUTES;
-  const twentyMinutesAgo = now - PRESENCE_TIMES.TWENTY_MINUTES;
+  const sixHoursAgo = now - PRESENCE_TIMES.SIX_HOURS;
 
   // Offline conditions
   if (
     (player.lastLeftAt && player.lastLeftAt >= player.lastSeenAt) || // Explicitly left
-    player.lastSeenAt < twentyMinutesAgo // No activity for 20+ minutes
+    player.lastSeenAt < sixHoursAgo // No activity for 6+ hours
   ) {
     return 'offline';
   }

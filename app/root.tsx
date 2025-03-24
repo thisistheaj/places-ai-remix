@@ -5,10 +5,12 @@ import {
     Scripts,
     ScrollRestoration,
     useLoaderData,
+    LiveReload,
 } from '@remix-run/react';
 import { json } from '@remix-run/node';
 import { AuthProvider } from './lib/auth';
 import './styles/globals.css';
+import type { LinksFunction } from "@remix-run/node";
 
 // Loader function to expose environment variables to the client
 export async function loader() {
@@ -26,6 +28,19 @@ export async function loader() {
     });
 }
 
+export const links: LinksFunction = () => {
+    return [
+        {
+            rel: "stylesheet",
+            href: "/styles/globals.css",
+        },
+        {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap",
+        },
+    ];
+};
+
 export function Layout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="en" className="h-full">
@@ -39,6 +54,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 {children}
                 <ScrollRestoration />
                 <Scripts />
+                <LiveReload />
             </body>
         </html>
     );
