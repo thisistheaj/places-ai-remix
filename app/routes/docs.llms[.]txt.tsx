@@ -29,12 +29,17 @@ Request Body:
   "x": number,        // Optional: Initial x position
   "y": number,        // Optional: Initial y position
   "direction": string, // Optional: Initial facing direction ("right", "up", "left", "down")
-  "skin": string      // Optional: Skin ID (two-digit string from "01" to "20")
+  "skin": string,     // Optional: Skin ID (two-digit string from "01" to "20")
+  "webhook": string,  // Required: URL to receive bot messages
+  "token": string     // Required: Custom token for webhook authentication
 }
 \`\`\`
 
 Notes:
-- All fields are optional - default values will be used if not specified
+- Webhook URL and token are required for bot creation
+- Webhook URL must be a valid URL that can receive POST requests
+- Token will be used to authenticate webhook requests
+- Other fields are optional - default values will be used if not specified
 - Direction must be one of: "right", "up", "left", "down"
 - Skin IDs must be two-digit strings from "01" to "20"
 - If x/y coordinates are provided, they must be valid numbers
@@ -52,7 +57,8 @@ Success Response:
     "skin": string,       // Current skin ID
     "isBot": boolean,     // Always true for bots
     "isMoving": boolean,  // Current movement state
-    "room": string | null // Current room name if in a room
+    "room": string | null, // Current room name if in a room
+    "webhook": string     // URL where messages will be sent
   }
 }
 \`\`\`
@@ -69,12 +75,14 @@ Examples:
 
 cURL:
 \`\`\`bash
-# Basic entry
+# Basic entry with required fields
 curl -X POST ${baseUrl}/api/enter \\
   -H "Authorization: Bearer your-bot-token" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "name": "MyBot"
+    "name": "MyBot",
+    "webhook": "https://your-domain.com/webhook",
+    "token": "your-webhook-token"
   }'
 
 # Entry with all options
@@ -86,7 +94,9 @@ curl -X POST ${baseUrl}/api/enter \\
     "x": 10,
     "y": 15,
     "direction": "right",
-    "skin": "05"
+    "skin": "05",
+    "webhook": "https://your-domain.com/webhook",
+    "token": "your-webhook-token"
   }'
 \`\`\`
 
@@ -101,9 +111,11 @@ const api = axios.create({
   }
 });
 
-// Basic entry
+// Basic entry with required fields
 const basicResponse = await api.post('/api/enter', {
-  name: 'MyBot'
+  name: 'MyBot',
+  webhook: 'https://your-domain.com/webhook',
+  token: 'your-webhook-token'
 });
 
 // Entry with all options
@@ -112,7 +124,9 @@ const fullResponse = await api.post('/api/enter', {
   x: 10,
   y: 15,
   direction: 'right',
-  skin: '05'
+  skin: '05',
+  webhook: 'https://your-domain.com/webhook',
+  token: 'your-webhook-token'
 });
 \`\`\`
 
@@ -125,12 +139,14 @@ headers = {
     'Authorization': 'Bearer your-bot-token'
 }
 
-# Basic entry
+# Basic entry with required fields
 basic_response = requests.post(
     f'{api_url}/api/enter',
     headers=headers,
     json={
-        'name': 'MyBot'
+        'name': 'MyBot',
+        'webhook': 'https://your-domain.com/webhook',
+        'token': 'your-webhook-token'
     }
 )
 
@@ -143,7 +159,9 @@ full_response = requests.post(
         'x': 10,
         'y': 15,
         'direction': 'right',
-        'skin': '05'
+        'skin': '05',
+        'webhook': 'https://your-domain.com/webhook',
+        'token': 'your-webhook-token'
     }
 )
 \`\`\`
@@ -796,6 +814,173 @@ The API uses standard HTTP status codes and returns error responses in the follo
     "details": object (optional)
   }
 }
+\`\`\`
+
+# Tutorials
+
+## Implementing Webhooks
+Learn how to set up a webhook endpoint to receive and respond to messages sent to your bot.
+
+### Webhook Request Format
+When a message is sent to your bot, it will be forwarded to your webhook URL with the following format:
+
+\`\`\`json
+{
+  "text": string,           // Message content
+  "sender": string,         // Name of the sender
+  "senderId": string,       // Unique ID of the sender
+  "type": string,          // Message type: "dm", "room", or "global"
+  "timestamp": number      // Unix timestamp of the message
+}
+\`\`\`
+
+Notes:
+- Webhook endpoints must be accessible via HTTPS
+- The endpoint should respond within 5 seconds
+- The token provided during bot creation will be sent in the Authorization header
+- Failed webhook deliveries will be retried up to 3 times
+
+### Implementation Examples
+
+TypeScript (Express):
+\`\`\`typescript
+import express from 'express';
+import type { Request, Response } from 'express';
+
+const app = express();
+app.use(express.json());
+
+interface WebhookMessage {
+  text: string;
+  sender: string;
+  senderId: string;
+  type: 'dm' | 'room' | 'global';
+  timestamp: number;
+}
+
+// Middleware to verify webhook token
+const verifyToken = (req: Request, res: Response, next: Function) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split('Bearer ').pop();
+  
+  if (!token || token !== process.env.WEBHOOK_TOKEN) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  next();
+};
+
+// Webhook endpoint
+app.post('/webhook', verifyToken, async (req: Request, res: Response) => {
+  try {
+    const message: WebhookMessage = req.body;
+    
+    // Process the message
+    console.log(\`Message from \${message.sender}: \${message.text}\`);
+    
+    // Implement your bot's logic here
+    if (message.text.toLowerCase().includes('hello')) {
+      // Send a response back using the bot's token
+      await fetch('${baseUrl}/api/send/your-bot-id', {
+        method: 'POST',
+        headers: {
+          'Authorization': \`Bearer \${process.env.BOT_TOKEN}\`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: \`Hello \${message.sender}!\`,
+          targetUserId: message.senderId
+        })
+      });
+    }
+    
+    // Acknowledge receipt
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.listen(3000, () => {
+  console.log('Webhook server running on port 3000');
+});
+\`\`\`
+
+Python (FastAPI):
+\`\`\`python
+from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
+from typing import Literal
+import httpx
+import os
+
+app = FastAPI()
+security = HTTPBearer()
+
+class WebhookMessage(BaseModel):
+    text: str
+    sender: str
+    senderId: str
+    type: Literal['dm', 'room', 'global']
+    timestamp: int
+
+async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if credentials.credentials != os.getenv('WEBHOOK_TOKEN'):
+        raise HTTPException(
+            status_code=401,
+            detail='Invalid token'
+        )
+    return credentials.credentials
+
+@app.post('/webhook')
+async def webhook(
+    message: WebhookMessage,
+    token: str = Depends(verify_token)
+):
+    try:
+        # Process the message
+        print(f'Message from {message.sender}: {message.text}')
+        
+        # Implement your bot's logic here
+        if 'hello' in message.text.lower():
+            # Send a response back using the bot's token
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f'${baseUrl}/api/send/your-bot-id',
+                    headers={
+                        'Authorization': f'Bearer {os.getenv("BOT_TOKEN")}',
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        'text': f'Hello {message.sender}!',
+                        'targetUserId': message.senderId
+                    }
+                )
+                response.raise_for_status()
+        
+        # Acknowledge receipt
+        return {'success': True}
+    except Exception as e:
+        print(f'Error processing webhook: {e}')
+        raise HTTPException(
+            status_code=500,
+            detail='Internal server error'
+        )
+
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run(app, host='0.0.0.0', port=3000)
+\`\`\`
+
+#### Security Best Practices
+- Always verify the webhook token in the Authorization header
+- Use environment variables to store sensitive tokens
+- Implement rate limiting on your webhook endpoint
+- Add request timeout handling
+- Validate the request body against the expected schema
+- Use HTTPS for your webhook endpoint
 \`\`\``;
 
   return new Response(docs, {

@@ -376,25 +376,28 @@ export const onMessageToBot = onValueCreated('/messages/dm/{chatId}/{messageId}'
       return null;
     }
     
-    // If not a bot, exit
-    if (!targetUser.isBot) {
-      console.log(`Target user ${message.targetId} is not a bot`);
+    // If not a bot or no webhook, exit
+    if (!targetUser.isBot || !targetUser.webhook) {
+      console.log(`Target user ${message.targetId} is not a bot or has no webhook`);
       return null;
     }
     
-    console.log(`Target user ${message.targetId} is a bot, forwarding message to /receive endpoint`);
+    console.log(`Target user ${message.targetId} is a bot, forwarding message to webhook: ${targetUser.webhook}`);
     
-    // Forward the message to the bot's receive endpoint
-    const apiUrl = process.env.API_URL || 'https://aihacker.house';
-    const receiveUrl = `${apiUrl}/api/receive/${message.targetId}`;
+    if (!targetUser.token) {
+      console.error('Bot has no token, skipping message');
+      return null;
+    }
     
-    const response = await fetch(receiveUrl, {
+    // Forward the message to the bot's webhook
+    const response = await fetch(targetUser.webhook, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': process.env.ADMIN_TOKEN || 'master-of-bots'
+        'Authorization': `Bearer ${targetUser.token}`
       },
       body: JSON.stringify({
+        botId: message.targetId,
         message: message.text,
         sourceUserId: message.uid
       })
@@ -402,7 +405,7 @@ export const onMessageToBot = onValueCreated('/messages/dm/{chatId}/{messageId}'
     
     if (!response.ok) {
       const errorData = await response.text();
-      console.error(`Error from receive endpoint: ${response.status} - ${errorData}`);
+      console.error(`Error from webhook: ${response.status} - ${errorData}`);
       return {
         success: false,
         error: `Failed to process message: ${response.status}`

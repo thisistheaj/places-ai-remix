@@ -84,6 +84,8 @@ interface BotCreationProps {
   y?: number;
   direction?: 'right' | 'up' | 'left' | 'down';
   skin?: string;
+  webhook?: string;
+  token?: string;
 }
 
 interface BotUpdateProps {
@@ -161,7 +163,9 @@ export const createBotPlayer = async (props?: BotCreationProps): Promise<Player>
         x: props?.x,
         y: props?.y,
         direction: props?.direction,
-        skin: props?.skin
+        skin: props?.skin,
+        webhook: props?.webhook,
+        token: props?.token
       }
     );
     
@@ -255,6 +259,8 @@ interface DefaultPlayerDataOverrides {
   y?: number;
   direction?: 'right' | 'up' | 'left' | 'down';
   skin?: string;
+  webhook?: string;
+  token?: string;
 }
 
 // Helper function to generate default player data (used for both users and bots)
@@ -281,7 +287,9 @@ function createDefaultPlayerData(
     room: null,
     lastSeenAt: Date.now(),
     skin: overrides.skin ?? defaultSkin,
-    isBot
+    isBot,
+    ...(overrides.webhook ? { webhook: overrides.webhook } : {}),
+    ...(overrides.token ? { token: overrides.token } : {})
   };
 }
 

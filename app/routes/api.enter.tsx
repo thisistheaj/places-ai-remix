@@ -24,6 +24,37 @@ export const action: ActionFunction = async ({ request }) => {
     // Parse request body for optional properties
     const body = await request.json().catch(() => ({}));
     
+    // Validate webhook URL is provided and valid
+    if (!body.webhook || typeof body.webhook !== 'string') {
+      return json({
+        success: false,
+        error: 'Webhook URL is required'
+      }, {
+        status: 400
+      });
+    }
+
+    try {
+      new URL(body.webhook);
+    } catch (e) {
+      return json({
+        success: false,
+        error: 'Invalid webhook URL format'
+      }, {
+        status: 400
+      });
+    }
+
+    // Validate token is provided
+    if (!body.token || typeof body.token !== 'string') {
+      return json({
+        success: false,
+        error: 'Token is required'
+      }, {
+        status: 400
+      });
+    }
+    
     // Type check and validate the input properties
     const props = {
       name: typeof body.name === 'string' ? body.name : undefined,
@@ -31,7 +62,9 @@ export const action: ActionFunction = async ({ request }) => {
       y: typeof body.y === 'number' ? body.y : undefined,
       direction: ['right', 'up', 'left', 'down'].includes(body.direction) ? body.direction : undefined,
       skin: typeof body.skin === 'string' && /^\d{2}$/.test(body.skin) && 
-            parseInt(body.skin) >= 1 && parseInt(body.skin) <= 20 ? body.skin : undefined
+            parseInt(body.skin) >= 1 && parseInt(body.skin) <= 20 ? body.skin : undefined,
+      webhook: body.webhook,
+      token: body.token
     };
 
     // Create a new bot player using the same flow as regular players

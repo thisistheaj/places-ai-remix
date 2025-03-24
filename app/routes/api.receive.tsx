@@ -4,7 +4,7 @@ import { getUserProfile } from '~/lib/user';
 import OpenAI from 'openai';
 import fetch from 'node-fetch';
 
-export const loader: LoaderFunction = async ({ request, params }) => {
+export const loader: LoaderFunction = async ({ request }) => {
   // Check for admin token in Authorization header
   const authHeader = request.headers.get('Authorization');
   const token = authHeader;
@@ -18,62 +18,23 @@ export const loader: LoaderFunction = async ({ request, params }) => {
     }); 
   }
 
-  const { id } = params;
-  if (!id) {
-    return json({ 
-      success: false, 
-      error: 'Bot ID is required' 
-    }, { 
-      status: 400 
-    });
-  }
-
   try {
-    // Get bot profile to check if it exists
-    const bot = await getUserProfile(id);
-    if (!bot) {
-      return json({ 
-        success: false, 
-        error: 'Bot not found' 
-      }, { 
-        status: 404 
-      });
-    }
-
-    if (!bot.isBot) {
-      return json({ 
-        success: false, 
-        error: 'The provided ID is not a bot' 
-      }, { 
-        status: 400 
-      });
-    }
-
     return json({ 
       success: true,
-      bot: {
-        id: bot.uid,
-        name: bot.name,
-        position: {
-          x: bot.x,
-          y: bot.y,
-          direction: bot.direction
-        }
-      },
-      message: "Send a POST request with a 'message' field to receive a response from this bot."
+      message: "Send a POST request with 'botId' and 'message' fields to receive a response from a bot."
     });
   } catch (error: any) {
-    console.error('Error getting bot information:', error);
+    console.error('Error:', error);
     return json({ 
       success: false, 
-      error: error.message || 'Failed to get bot information' 
+      error: error.message || 'Internal server error' 
     }, { 
       status: 500 
     });
   }
 };
 
-export const action: ActionFunction = async ({ request, params }) => {
+export const action: ActionFunction = async ({ request }) => {
   if (request.method !== 'POST') {
     return json({ error: 'Method not allowed' }, { status: 405 });
   }
@@ -91,21 +52,20 @@ export const action: ActionFunction = async ({ request, params }) => {
     }); 
   }
 
-  const { id } = params;
-  if (!id) {
-    return json({ 
-      success: false, 
-      error: 'Bot ID is required' 
-    }, { 
-      status: 400 
-    });
-  }
-
   try {
     // Parse request body for message text and source user ID
     const body = await request.json();
-    const { message, sourceUserId } = body;
+    const { message, sourceUserId, botId } = body;
     
+    if (!botId) {
+      return json({ 
+        success: false, 
+        error: 'Bot ID is required' 
+      }, { 
+        status: 400 
+      });
+    }
+
     if (!message || typeof message !== 'string') {
       return json({ 
         success: false, 
@@ -116,7 +76,7 @@ export const action: ActionFunction = async ({ request, params }) => {
     }
 
     // Get bot profile to check if it exists
-    const bot = await getUserProfile(id);
+    const bot = await getUserProfile(botId);
     if (!bot) {
       return json({ 
         success: false, 

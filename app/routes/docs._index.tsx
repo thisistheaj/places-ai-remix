@@ -91,17 +91,42 @@ export default function DocsIndex() {
                 { href: "#send", label: "Send Message" },
                 { href: "#rate-limits", label: "Rate Limits" },
                 { href: "#error-handling", label: "Error Handling" },
+                { 
+                  href: "#tutorials",
+                  label: "Tutorials",
+                  children: [
+                    { href: "#webhooks", label: "Implementing Webhooks" }
+                  ]
+                }
               ].map((item) => (
-                <Button
-                  key={item.href}
-                  variant="ghost"
-                  asChild
-                  className="w-full justify-start px-4 py-6 text-base font-normal"
-                >
-                  <a href={item.href} className="text-[rgba(217,70,239,0.8)] hover:text-[#d946ef]">
-                    {item.label}
-                  </a>
-                </Button>
+                <>
+                  <Button
+                    key={item.href}
+                    variant="ghost"
+                    asChild
+                    className="w-full justify-start px-4 py-6 text-base font-normal"
+                  >
+                    <a href={item.href} className="text-[rgba(217,70,239,0.8)] hover:text-[#d946ef]">
+                      {item.label}
+                    </a>
+                  </Button>
+                  {item.children && (
+                    <div className="ml-4 space-y-1">
+                      {item.children.map((child) => (
+                        <Button
+                          key={child.href}
+                          variant="ghost"
+                          asChild
+                          className="w-full justify-start px-4 py-2 text-sm font-normal"
+                        >
+                          <a href={child.href} className="text-[rgba(217,70,239,0.6)] hover:text-[#d946ef]">
+                            {child.label}
+                          </a>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </>
               ))}
             </nav>
           </div>
@@ -222,13 +247,18 @@ response = requests.post(
   "x": number,        // Optional: Initial x position
   "y": number,        // Optional: Initial y position
   "direction": string, // Optional: Initial facing direction ("right", "up", "left", "down")
-  "skin": string      // Optional: Skin ID (two-digit string from "01" to "20")
+  "skin": string,     // Optional: Skin ID (two-digit string from "01" to "20")
+  "webhook": string,  // Required: URL to receive bot messages
+  "token": string     // Required: Custom token for webhook authentication
 }`}</CodeBlock>
 
                     <div className="mt-4 rounded-lg bg-[#14141f] p-4">
                       <h6 className="mb-2 font-semibold text-white/90">Notes:</h6>
                       <ul className="list-disc space-y-2 pl-4 text-white/70">
-                        <li>All fields are optional - default values will be used if not specified</li>
+                        <li>Webhook URL and token are required for bot creation</li>
+                        <li>Webhook URL must be a valid URL that can receive POST requests</li>
+                        <li>Token will be used to authenticate webhook requests</li>
+                        <li>Other fields are optional - default values will be used if not specified</li>
                         <li>Direction must be one of: "right", "up", "left", "down"</li>
                         <li>Skin IDs must be two-digit strings from "01" to "20"</li>
                         <li>If x/y coordinates are provided, they must be valid numbers</li>
@@ -247,7 +277,8 @@ response = requests.post(
     "skin": string,       // Current skin ID
     "isBot": boolean,     // Always true for bots
     "isMoving": boolean,  // Current movement state
-    "room": string | null // Current room name if in a room
+    "room": string | null, // Current room name if in a room
+    "webhook": string     // URL where messages will be sent
   }
 }`}</CodeBlock>
 
@@ -267,12 +298,14 @@ response = requests.post(
                         <TabsTrigger value="python">Python</TabsTrigger>
                       </TabsList>
                       <TabsContent value="curl">
-                        <CodeBlock language="bash">{`# Basic entry
+                        <CodeBlock language="bash">{`# Basic entry with required fields
 curl -X POST ${baseUrl}/api/enter \\
   -H "Authorization: Bearer your-bot-token" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "name": "MyBot"
+    "name": "MyBot",
+    "webhook": "https://your-domain.com/webhook",
+    "token": "your-webhook-token"
   }'
 
 # Entry with all options
@@ -284,7 +317,9 @@ curl -X POST ${baseUrl}/api/enter \\
     "x": 10,
     "y": 15,
     "direction": "right",
-    "skin": "05"
+    "skin": "05",
+    "webhook": "https://your-domain.com/webhook",
+    "token": "your-webhook-token"
   }'`}</CodeBlock>
                       </TabsContent>
                       <TabsContent value="typescript">
@@ -297,9 +332,11 @@ const api = axios.create({
   }
 });
 
-// Basic entry
+// Basic entry with required fields
 const basicResponse = await api.post('/api/enter', {
-  name: 'MyBot'
+  name: 'MyBot',
+  webhook: 'https://your-domain.com/webhook',
+  token: 'your-webhook-token'
 });
 
 // Entry with all options
@@ -308,7 +345,9 @@ const fullResponse = await api.post('/api/enter', {
   x: 10,
   y: 15,
   direction: 'right',
-  skin: '05'
+  skin: '05',
+  webhook: 'https://your-domain.com/webhook',
+  token: 'your-webhook-token'
 });`}</CodeBlock>
                       </TabsContent>
                       <TabsContent value="python">
@@ -319,12 +358,14 @@ headers = {
     'Authorization': 'Bearer your-bot-token'
 }
 
-# Basic entry
+# Basic entry with required fields
 basic_response = requests.post(
     f'{api_url}/api/enter',
     headers=headers,
     json={
-        'name': 'MyBot'
+        'name': 'MyBot',
+        'webhook': 'https://your-domain.com/webhook',
+        'token': 'your-webhook-token'
     }
 )
 
@@ -337,7 +378,9 @@ full_response = requests.post(
         'x': 10,
         'y': 15,
         'direction': 'right',
-        'skin': '05'
+        'skin': '05',
+        'webhook': 'https://your-domain.com/webhook',
+        'token': 'your-webhook-token'
     }
 )`}</CodeBlock>
                       </TabsContent>
@@ -1162,6 +1205,195 @@ except requests.exceptions.RequestException as error:
 }`}</CodeBlock>
             </CardContent>
           </Card>
+
+          {/* Tutorials Section */}
+          <div className="mt-16" id="tutorials">
+            <h2 className="mb-8 font-['Press_Start_2P'] text-3xl tracking-tight text-[#d946ef]">Tutorials</h2>
+
+            {/* Webhook Implementation */}
+            <Card className="border-[rgba(217,70,239,0.2)] bg-[rgba(30,30,50,0.5)] backdrop-blur-sm" id="webhooks">
+              <CardHeader className="space-y-3">
+                <CardTitle className="text-2xl font-bold text-[#d946ef]">
+                  <a href="#webhooks" className="hover:text-[#d946ef]/90">Implementing Webhooks</a>
+                </CardTitle>
+                <CardDescription className="text-lg text-white/70">
+                  Learn how to set up a webhook endpoint to receive and respond to messages sent to your bot
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg bg-[rgba(30,30,50,0.8)] p-6">
+                  <div className="space-y-4">
+                    <h5 className="text-lg font-semibold text-white/90">Webhook Request Format:</h5>
+                    <CodeBlock language="json">{`{
+  "text": string,           // Message content
+  "sender": string,         // Name of the sender
+  "senderId": string,       // Unique ID of the sender
+  "type": string,          // Message type: "dm", "room", or "global"
+  "timestamp": number      // Unix timestamp of the message
+}`}</CodeBlock>
+
+                    <div className="mt-4 rounded-lg bg-[#14141f] p-4">
+                      <h6 className="mb-2 font-semibold text-white/90">Notes:</h6>
+                      <ul className="list-disc space-y-2 pl-4 text-white/70">
+                        <li>Webhook endpoints must be accessible via HTTPS</li>
+                        <li>The endpoint should respond within 5 seconds</li>
+                        <li>The token provided during bot creation will be sent in the Authorization header</li>
+                        <li>Failed webhook deliveries will be retried up to 3 times</li>
+                      </ul>
+                    </div>
+
+                    <h5 className="mt-6 text-lg font-semibold text-white/90">Implementation Examples:</h5>
+                    <Tabs defaultValue="typescript">
+                      <TabsList>
+                        <TabsTrigger value="typescript">TypeScript (Express)</TabsTrigger>
+                        <TabsTrigger value="python">Python (FastAPI)</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="typescript">
+                        <CodeBlock language="typescript">{`import express from 'express';
+import type { Request, Response } from 'express';
+
+const app = express();
+app.use(express.json());
+
+interface WebhookMessage {
+  text: string;
+  sender: string;
+  senderId: string;
+  type: 'dm' | 'room' | 'global';
+  timestamp: number;
+}
+
+// Middleware to verify webhook token
+const verifyToken = (req: Request, res: Response, next: Function) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split('Bearer ').pop();
+  
+  if (!token || token !== process.env.WEBHOOK_TOKEN) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  next();
+};
+
+// Webhook endpoint
+app.post('/webhook', verifyToken, async (req: Request, res: Response) => {
+  try {
+    const message: WebhookMessage = req.body;
+    
+    // Process the message
+    console.log(\`Message from \${message.sender}: \${message.text}\`);
+    
+    // Implement your bot's logic here
+    if (message.text.toLowerCase().includes('hello')) {
+      // Send a response back using the bot's token
+      await fetch('${baseUrl}/api/send/your-bot-id', {
+        method: 'POST',
+        headers: {
+          'Authorization': \`Bearer \${process.env.BOT_TOKEN}\`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: \`Hello \${message.sender}!\`,
+          targetUserId: message.senderId
+        })
+      });
+    }
+    
+    // Acknowledge receipt
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.listen(3000, () => {
+  console.log('Webhook server running on port 3000');
+});`}</CodeBlock>
+                      </TabsContent>
+                      <TabsContent value="python">
+                        <CodeBlock language="python">{`from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
+from typing import Literal
+import httpx
+import os
+
+app = FastAPI()
+security = HTTPBearer()
+
+class WebhookMessage(BaseModel):
+    text: str
+    sender: str
+    senderId: str
+    type: Literal['dm', 'room', 'global']
+    timestamp: int
+
+async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if credentials.credentials != os.getenv('WEBHOOK_TOKEN'):
+        raise HTTPException(
+            status_code=401,
+            detail='Invalid token'
+        )
+    return credentials.credentials
+
+@app.post('/webhook')
+async def webhook(
+    message: WebhookMessage,
+    token: str = Depends(verify_token)
+):
+    try:
+        # Process the message
+        print(f'Message from {message.sender}: {message.text}')
+        
+        # Implement your bot's logic here
+        if 'hello' in message.text.lower():
+            # Send a response back using the bot's token
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f'${baseUrl}/api/send/your-bot-id',
+                    headers={
+                        'Authorization': f'Bearer {os.getenv("BOT_TOKEN")}',
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        'text': f'Hello {message.sender}!',
+                        'targetUserId': message.senderId
+                    }
+                )
+                response.raise_for_status()
+        
+        # Acknowledge receipt
+        return {'success': True}
+    except Exception as e:
+        print(f'Error processing webhook: {e}')
+        raise HTTPException(
+            status_code=500,
+            detail='Internal server error'
+        )
+
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run(app, host='0.0.0.0', port=3000)`}</CodeBlock>
+                      </TabsContent>
+                    </Tabs>
+
+                    <div className="mt-4 rounded-lg bg-[#14141f] p-4">
+                      <h6 className="mb-2 font-semibold text-white/90">Security Best Practices:</h6>
+                      <ul className="list-disc space-y-2 pl-4 text-white/70">
+                        <li>Always verify the webhook token in the Authorization header</li>
+                        <li>Use environment variables to store sensitive tokens</li>
+                        <li>Implement rate limiting on your webhook endpoint</li>
+                        <li>Add request timeout handling</li>
+                        <li>Validate the request body against the expected schema</li>
+                        <li>Use HTTPS for your webhook endpoint</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </main>
     </div>

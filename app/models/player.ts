@@ -17,6 +17,8 @@ export interface Player {
   lastLeftAt?: number;
   skin?: string; // Character skin number (01-20)
   isBot?: boolean; // Simple flag to identify bot players
+  webhook?: string; // URL for bot message delivery
+  token?: string; // Authentication token for webhook
 }
 
 export interface PlayerPosition {
